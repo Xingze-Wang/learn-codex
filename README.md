@@ -149,7 +149,7 @@ learn-codex/
 
 ## Honesty about scope
 
-`codex-rs` is a large production system in Rust; this is ~4,000 lines of Python. It is a reading
+`codex-rs` is a large production system in Rust; this is ~7,000 lines of Python plus ~1,800 of tests. It is a reading
 aid, not a reimplementation. Where a chapter simplifies, it says so. Where a detail is load-bearing —
 `realpath` on sandbox roots, `store: false` and encrypted reasoning, unanswered `call_id`s, the
 `EIO` that means a PTY child exited — it is kept, because those are the details that decide

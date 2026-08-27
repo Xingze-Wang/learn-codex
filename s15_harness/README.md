@@ -110,7 +110,7 @@ where the session will be written, what the rules say.
 
 ## What this is not
 
-`codex-rs` is a large production system, and this is roughly 4,000 lines of Python. Missing
+`codex-rs` is a large production system, and this is roughly 7,000 lines of Python. Missing
 here, and worth reading in the real source:
 
 - **Streaming everything.** Real Codex streams reasoning summaries, tool-call argument deltas,

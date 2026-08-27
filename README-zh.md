@@ -145,7 +145,7 @@ learn-codex/
 
 ## 关于范围，说实话
 
-`codex-rs` 是一个用 Rust 写的大型生产系统，这里是约 4000 行 Python。
+`codex-rs` 是一个用 Rust 写的大型生产系统，这里是约 7000 行 Python 加约 1800 行测试。
 它是一份**阅读辅助**，不是重新实现。凡是简化的地方，章节里都会说明；
 凡是承重的细节——沙箱根路径的 `realpath`、`store: false` 与加密 reasoning、
 没被回答的 `call_id`、PTY 子进程退出时那个 `EIO`——都保留了下来，
