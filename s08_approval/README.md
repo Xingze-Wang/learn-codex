@@ -12,21 +12,24 @@
 
 ## The problem
 
-[s07](../s07_sandbox/)'s sandbox blocked a write. But that write **might have been reasonable** —
-the model wants to install a dependency, write `~/.npmrc`, run a build that needs the network.
+Your agent tried something and was stopped: installing a dependency, writing `~/.npmrc`,
+running a build that needs the network.
 
-There is a decision to make, and both extremes are wrong:
+**That block might have been right, and it might have been wrong.** Only you know which.
+
+So there is a decision to make, and both extremes are wrong:
 
 - **Ask before every command** → the user gets worn down and starts clicking "allow" without
   reading. At that point your approval mechanism **is no longer a security mechanism**.
 - **Never ask** → the agent hits a wall and gives up; half the tasks do not complete.
 
-And a third constraint: **asking is impossible in s01's function shape.** A function returns
-once; it cannot "ask, wait for your answer, then carry on".
+And asking is itself hard: **if the code running the turn is an ordinary function, it cannot ask
+at all.** A function returns once; it cannot "ask, wait for your answer, then carry on" — which
+is what [s02](../s02_protocol/) exists to fix.
 
 ---
 
-## First: the order is the design
+## the order is the design
 
 Most people's instinct is "ask, then run". Codex does the reverse:
 

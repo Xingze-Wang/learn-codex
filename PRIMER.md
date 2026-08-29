@@ -1,4 +1,4 @@
-# Before you start: everything you need to know
+# Look-up page
 
 [English](PRIMER.md) · [中文](PRIMER-zh.md)
 
@@ -6,12 +6,13 @@
 
 ---
 
-This page is for someone who has **never written code** but wants to understand how an AI agent
-actually works.
-
-After it, you can read every code block in the fifteen chapters. It takes about twenty minutes.
-
-If you already write Python, skip it and go to [s01](s01_agent_loop/README.md).
+> **This is not a "read this first".**
+>
+> Every word in the fifteen chapters is explained where it first appears. You do not need to
+> learn anything before starting — go straight to [s01](s01_agent_loop/README.md).
+>
+> This page is only a **place to look things up** when something stops you mid-read. You can
+> also never open it.
 
 ---
 
@@ -37,7 +38,7 @@ there.
 
 ---
 
-## 1. What a "program" and a "terminal" are
+## What a "program" and a "terminal" are
 
 A **program** is a text file with step-by-step instructions. The computer does them top to
 bottom.
@@ -64,12 +65,12 @@ Something like `--demo` is called an **argument** — a note you hand the progra
 
 ---
 
-## 2. What Python looks like
+## What Python looks like
 
-Python is a programming language, written to look deliberately like English. You need to
-recognize six things.
+> Every code block in every chapter is annotated line by line, so **you do not need to learn
+> Python first.** What follows is just to give you a feel; come back if something stops you.
 
-### 1. Variables — giving something a name
+### Variables — giving something a name
 
 ```python
 cmd = "ls -la"
@@ -79,7 +80,7 @@ Read it as: **"from now on, the name `cmd` means the text `ls -la`."**
 
 The thing in quotes is a **string** — "a piece of text".
 
-### 2. Lists — several things, in order
+### Lists — several things, in order
 
 ```python
 history = []                       # an empty list
@@ -93,7 +94,7 @@ history.append("hi there")         # and another
 **The single most important thing in this repo is a list**, called `history`, holding the whole
 conversation in order.
 
-### 3. Dictionaries — a bundle of labelled things
+### Dictionaries — a bundle of labelled things
 
 ```python
 call = {"name": "exec_command", "cmd": "ls"}
@@ -111,7 +112,7 @@ The left side of the colon is a **key**, the right side a **value**.
 
 Dictionaries can hold dictionaries, and lists, nested as deep as you like. You will see plenty.
 
-### 4. Functions — a named piece of work you can reuse
+### Functions — a named piece of work you can reuse
 
 ```python
 def exec_command(cmd, workdir=None):
@@ -131,7 +132,7 @@ Using it:
 result = exec_command("ls")
 ```
 
-### 5. if
+### if
 
 ```python
 if not calls:
@@ -143,7 +144,7 @@ Read it as: **"if `calls` is empty, hand back `last_message` and stop here."**
 (In Python an empty list `[]`, an empty string `""` and the number `0` all count as false. So
 `not calls` means "there is nothing in calls".)
 
-### 6. for and while — repeating
+### for and while — repeating
 
 ```python
 for call in calls:          # take the things in calls one at a time, do this to each
@@ -155,9 +156,10 @@ while True:                 # repeat forever, until a return or break inside sto
     ...
 ```
 
-**`while True` is the heart of this entire repo.** The thirty lines in s01 are one `while True`.
+`while True` shows up in s01, annotated line by line where it appears. You do not have to
+remember it.
 
-### That is all
+### Two more
 
 Two more you will see but do **not** need to truly understand:
 
@@ -180,7 +182,7 @@ humans**; delete them and the program runs exactly the same. Skip them if they a
 
 ---
 
-## 3. What JSON is
+## What JSON is
 
 **JSON is the standard way of writing a dictionary down as text.**
 
@@ -196,7 +198,13 @@ The same thing as JSON (which is just text):
 {"name": "exec_command", "cmd": "ls"}
 ```
 
-…identical. Not a coincidence — JSON was defined from this notation.
+…almost identical. But avoid one misunderstanding: **JSON is not "a Python thing".**
+It came from JavaScript, has no relation to Python, and the two just happen to have landed on
+the same braces-and-colons notation.
+
+This matters because later you will watch a program written in Rust talk to one written in
+Python using JSON ([s13](s13_mcp/README.md)). They can, precisely because **JSON belongs to no
+language.**
 
 **Why is it needed?** Because your program and a program on another computer need to exchange
 data, and only text travels over a network. So:
@@ -213,7 +221,7 @@ You will see both constantly.
 
 ---
 
-## 4. What "calling an API" means
+## What "calling an API" means
 
 **It means phoning someone else's computer, asking a question, and waiting for the answer.**
 
@@ -250,7 +258,7 @@ Each piece is called an **event**.
 
 ---
 
-## 5. What a "process" is
+## What a "process" is
 
 Type `ls` and press Enter, and the computer **starts a process**: one running instance of a
 program. It finishes, and it is gone.
@@ -280,7 +288,7 @@ proc.stdout         # what it printed
 
 ---
 
-## 6. What async / await means
+## What async / await means
 
 Only three chapters use it ([s02](s02_protocol/README.md),
 [s08](s08_approval/README.md), [s15](s15_harness/README.md)). You need one idea:
@@ -313,7 +321,7 @@ blocking anyone". That is enough.
 
 ---
 
-## 7. The five words this repo keeps using
+## The five words this repo keeps using
 
 These five are the skeleton. Know them and the rest follows.
 
@@ -337,7 +345,7 @@ that chain.
 
 ---
 
-## 8. Glossary
+## Glossary
 
 In roughly the order you will meet them. Do not memorize; come back and look.
 
@@ -359,7 +367,7 @@ In roughly the order you will meet them. Do not memorize; come back and look.
 | kernel | the innermost layer of the operating system; it decides who may touch what |
 | sandbox | restrictions the kernel wraps around a process |
 | PTY | a fake terminal, so a program believes it is attached to a real one ([s06](s06_unified_exec/README.md)) |
-| token | the unit the model counts in; roughly half a word to a word |
+| token | the unit the model counts in. In English, roughly half a word to a word; **in Chinese, closer to one or two characters**, so the same passage costs more |
 | context window | how many tokens the model can read at once |
 | patch | a set of instructions saying "replace these lines with those" ([s05](s05_apply_patch/README.md)) |
 | schema | a description of what a thing is supposed to look like ([s04](s04_tool_registry/README.md)) |
@@ -372,7 +380,7 @@ In roughly the order you will meet them. Do not memorize; come back and look.
 
 ---
 
-## 9. Three ways to read this
+## Three ways to read this
 
 **A. You have never written code**
 
@@ -400,4 +408,4 @@ Read each chapter's "The problem" and "The solution" to build the map, then foll
 
 ---
 
-When you are ready: [s01: one loop, one shell](s01_agent_loop/README.md).
+Whenever you feel like starting: [s01: one loop, one shell](s01_agent_loop/README.md).

@@ -12,12 +12,13 @@
 
 ## The problem
 
-s01 hard-coded the tool: one `EXEC_COMMAND_TOOL`, one `if name == "exec_command"`.
+Right now your agent can do exactly one thing: run shell commands.
 
-Now things need adding: `apply_patch` (edit files), `update_plan` (keep a plan), and however
-many MCP tools ([s13](../s13_mcp/)). So the `if / elif` chain gets longer.
+You want it to edit files too, and keep a plan, and query your company's issue tracker. The
+obvious move is to add another `if` in the code, then another `elif`, and keep going.
 
-But length is not what breaks it. These three things vary **per turn**:
+That road does not hold. Not because the chain gets long, but because these three things vary
+**from one turn to the next**:
 
 1. **The model varies.** Some models were trained on a tool called `exec_command`, others on
    `shell`, with different argument shapes. Hand over the wrong one and the model is calling
@@ -30,7 +31,7 @@ The third is the easiest to miss, so start there.
 
 ---
 
-## First: two kinds of tool, two kinds of payload
+## two kinds of tool, two kinds of payload
 
 **Kind one: a function tool.** You supply a JSON Schema describing the arguments; the model
 gives you back JSON.

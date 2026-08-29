@@ -23,7 +23,7 @@
 
 ---
 
-## 先理解：MCP 是什么
+## MCP 是什么
 
 **MCP（Model Context Protocol）** 就是一个约定：
 **一个进程，在 stdin/stdout 上说「换行分隔的 JSON-RPC」，就能给 agent 提供工具。**

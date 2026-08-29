@@ -12,7 +12,10 @@
 
 ## The problem
 
-[s08](../s08_approval/) asks the user when the sandbox blocks something. Two cases slip through:
+You have an agent that asks you whenever it gets stopped. Reasonable — until you count how
+often it asks.
+
+Two cases ruin it:
 
 **One: obviously safe commands still ask.** Under `untrusted`, `git status`, `ls` and
 `cat README.md` each raise a prompt, because the harness **has no idea which commands only
@@ -27,7 +30,7 @@ the one prompt that mattered.
 
 ---
 
-## First: why you cannot match commands with a regex
+## why you cannot match commands with a regex
 
 The first instinct is an allowlist: if the command starts with `git status`, let it through.
 

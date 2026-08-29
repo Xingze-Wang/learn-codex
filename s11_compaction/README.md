@@ -12,7 +12,7 @@
 
 ## The problem
 
-Every chapter so far grows `history` forever. A two-hour session holds:
+After two hours of working with an agent, this has piled up:
 
 - dozens of `pytest` outputs, thousands of lines each
 - hundreds of file reads, in full
@@ -23,7 +23,7 @@ halfway through the task.
 
 ---
 
-## First: what a context window is
+## what a context window is
 
 Think of it as **a fixed-size sheet of scratch paper** the model works on.
 

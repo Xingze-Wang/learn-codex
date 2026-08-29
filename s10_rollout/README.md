@@ -12,9 +12,9 @@
 
 ## The problem
 
-Everything so far lives in `self.history`, a list in memory. Close the terminal and it is gone.
+You and the agent worked together for two hours. Then you closed the terminal.
 
-What you lose is not just a chat log:
+**All of it is gone.** And what you lose is not just a chat log:
 
 - which files it read, which approaches it tried, which one was a dead end
 - the constraints you gave it ("don't touch vendor/")
@@ -29,7 +29,7 @@ whole turn — and it is exactly the long, slow, crash-prone turns that were mos
 
 ---
 
-## First: JSONL and "append-only"
+## JSONL and "append-only"
 
 **JSONL** is a text file with one JSON object per line.
 

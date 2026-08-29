@@ -32,7 +32,7 @@ Both share one root cause: **neither carries what the model believed the file lo
 
 ---
 
-## First: a context patch verifies itself
+## a context patch verifies itself
 
 The third option, the one Codex takes:
 

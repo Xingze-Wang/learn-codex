@@ -23,7 +23,7 @@ uses something different, and Codex cannot — and should not — know what your
 
 ---
 
-## First: what MCP is
+## what MCP is
 
 **MCP (Model Context Protocol)** is one convention: **a process that speaks newline-delimited
 JSON-RPC over stdin/stdout can provide tools to an agent.**

@@ -27,11 +27,8 @@ is this chapter.
 
 ---
 
-## First: how a model "asks" for a command to run
+## how a model "asks" for a command to run
 
-> If `list`, `dict`, `function` or `JSON` are not familiar words, read
-> **[the primer](../PRIMER.md)** first. It takes twenty minutes and this chapter
-> will make sense afterwards.
 
 A model cannot execute anything. It can only emit text.
 

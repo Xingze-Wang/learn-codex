@@ -4,8 +4,10 @@
 
 [English](README.md) · [中文](README-zh.md)
 
-> **Never written code?** Start with **[the primer](PRIMER.md)** — twenty minutes, and
-> every code block here becomes readable. It assumes nothing.
+> **Never written code? Start at [s01](s01_agent_loop/) anyway.** Nothing here needs to be
+> learned first — every term is explained where it first appears, and every code block is
+> annotated line by line. There is a [look-up page](PRIMER.md) if something stops you, but no
+> chapter requires it.
 
 ---
 
@@ -158,17 +160,18 @@ Background reading, for how others frame it:
 Every chapter has the same shape, and assumes you know nothing going in:
 
 ```
-The problem        a concrete thing that breaks, in plain language
-First: <concept>   the one idea you need before the code makes sense
-                   (what a PTY is, what an OS sandbox is, what JSON-RPC is...)
+The problem        something that breaks, described in your world -- not in chapter N-1
+<the concept>      whatever you need to know, explained right there, right then
 The solution       a diagram, and a table of signal -> meaning -> action
-How it works       Step 1..N, each a few lines of code and a sentence saying why
+How it works       Step 1..N, each a few lines of annotated code and why it is that way
+What changed       before this chapter / after it
 Try it             the exact command, and what to watch when you run it
 Next               the pain this leaves behind, which is the next chapter
 ```
 
-Chapters are standalone. Each `code.py` runs on its own and repeats whatever kernel it needs, so
-you can open s09 without having read s08.
+**You can open any chapter cold.** Each one states its problem without assuming you read the
+previous one, and each `code.py` runs on its own. Reading in order shows you *why* each mechanism
+appeared, but nothing breaks if you jump.
 
 s15 is the exception: it imports the other chapters, because composition is its subject.
 
@@ -179,7 +182,7 @@ Suggested order if you are not reading straight through:
 - **What makes it survive** — s10, s11
 - **What makes it extensible** — s12, s13, s14
 
-And if any word here is unfamiliar, the [primer](PRIMER.md) has a glossary of every one of them.
+If a word stops you anywhere, the [look-up page](PRIMER.md) has all of them — but each chapter also explains its own as it goes.
 
 ## Project structure
 

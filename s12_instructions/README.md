@@ -12,9 +12,7 @@
 
 ## The problem
 
-For eleven chapters `BASE_INSTRUCTIONS` has been one hard-coded string. Reality is messier.
-
-**Problem one: how does a repository tell the agent what the rules are here?**
+**Problem one: you repeat yourself at the start of every single session.**
 
 "This project uses pnpm, not npm." "Tests run with `make test`, not `pytest`." "Don't touch
 vendor/." You should not have to say these again in every conversation.
@@ -31,7 +29,7 @@ process exists.
 
 ---
 
-## First: instructions arrive on different channels
+## instructions arrive on different channels
 
 What you send the model is not one string. There are at least three channels, with **different
 authority**:

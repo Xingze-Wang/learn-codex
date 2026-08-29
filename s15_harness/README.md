@@ -27,7 +27,7 @@ Order is not an implementation detail. **Order is the design.**
 
 ---
 
-## First: this chapter does not copy code
+## this chapter does not copy code
 
 Each of the first fourteen `code.py` files is self-contained (each carries its own kernel). This
 one is not:

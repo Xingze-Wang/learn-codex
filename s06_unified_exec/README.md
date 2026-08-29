@@ -12,9 +12,10 @@
 
 ## The problem
 
-s01 did this: `subprocess.run(["/bin/bash", "-lc", cmd])`, wait for exit, take the output.
+The obvious way to let an agent run a command is: **start it, wait for it to finish, take the
+output.**
 
-Four entirely ordinary cases break it on the spot:
+Four entirely ordinary cases break that on the spot:
 
 ```
 cd build && make      -> the cd works, but the next call is a brand new bash, back where it started
@@ -27,7 +28,7 @@ The first two are the worst: **one silently does the wrong thing, the other hang
 
 ---
 
-## First: what a PTY is, and why not pipes
+## what a PTY is, and why not pipes
 
 `subprocess` uses **pipes** by default to collect a child's output. Pipes are fine for `ls`, but
 interactive programs misbehave through them.

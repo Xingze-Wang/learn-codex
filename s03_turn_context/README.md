@@ -23,13 +23,13 @@ So you think: fine, put that information in every turn. And immediately hit the 
 **The same `<environment_context>` pasted thirty turns in a row teaches the model to skip it.**
 It becomes background noise. And it costs tokens every single turn.
 
-There is a third problem, one that [s02](../s02_protocol/) just created: the user can now change
-settings while a turn is running. A tool that started under "read-only" and finds itself under
+There is a third problem: a user can change a setting while the agent is halfway through working
+(a good agent should allow that — see [s02](../s02_protocol/)). A tool that started under "read-only" and finds itself under
 "workspace-write" halfway through — which one does it obey?
 
 ---
 
-## First: what a "turn" is
+## what a "turn" is
 
 A turn starts when the user says something and ends when the model stops asking for tools. In
 between it may have run ten commands and made five model requests — all one turn.

@@ -12,23 +12,26 @@
 
 ## The problem
 
-So far every harness policy lives in the code: how the sandbox is configured, when the user is
-asked, what context gets injected.
+Your team has a rule: **nobody pushes directly; pushes go through CI.**
 
-But every team's rules differ:
+The agent does not know that rule. And the code deciding the agent's behavior was written by the
+people who wrote the agent — not by you.
+
+Every team's rules differ:
 
 - "The agent never pushes directly; pushes go through CI."
 - "Inject our style guide at the start of every session."
 - "Deletions always need a human, even when the sandbox allows them."
 
-[s09](../s09_exec_policy/)'s rule file can express the first, but not the second or third — it
-only prefix-matches **commands** and cannot run arbitrary logic.
+A rule file that matches command prefixes can express the first ([s09](../s09_exec_policy/) is
+exactly that), but not the second or third — it only compares the start of a command and cannot
+run arbitrary logic.
 
 And asking every team to fork Codex is obviously not the answer.
 
 ---
 
-## First: a hook is just a program
+## a hook is just a program
 
 Codex does not invent a config language. It does this instead: **run a program you wrote, pass
 JSON on stdin/stdout.**

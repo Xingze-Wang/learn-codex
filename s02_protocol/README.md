@@ -17,8 +17,8 @@ the wrong file.
 
 You want to say: *"wait, not that one."*
 
-**There is nowhere to say it.** s01's `run_turn` is an ordinary function: you call it, it runs,
-it returns. During "it runs", the only thing you can do is Ctrl-C — killing the whole process,
+**There is nowhere to say it.** The code running that turn is an ordinary function: you call it,
+it runs, it returns. During "it runs", the only thing you can do is Ctrl-C — killing the whole process,
 along with everything it had already worked out.
 
 The same flaw has two more faces:
@@ -30,7 +30,7 @@ The same flaw has two more faces:
 
 ---
 
-## First: a function is the wrong shape for this
+## a function is the wrong shape for this
 
 A function call has a fixed shape:
 
@@ -160,8 +160,15 @@ task = asyncio.create_task(sess.run_turn(sub.id, op.text))
 sess.active = ActiveTurn(sub.id, uuid.uuid4().hex[:12], task)
 ```
 
-`asyncio.create_task` means "run this in the background, I'll carry on". So `_submission_loop`
-goes straight back to `await self.submissions.get()` and can take the next op.
+`asyncio.create_task` means "note that this needs doing; I'll carry on for now".
+
+**There is an easy misunderstanding here worth clearing up: this is not a background thread.**
+There is one thread throughout. `run_turn` only gets a turn when something else **stops to
+wait** — that is, at an `await` somewhere. They take turns; they do not run at once.
+
+Which is exactly why cancelling works: you cannot safely kill a genuinely parallel thread from
+outside (it might be halfway through writing a file). Here, cancellation only lands at an
+`await` — and those places are **known and controlled**.
 
 **The key property: a task can be cancelled. A function call cannot.**
 

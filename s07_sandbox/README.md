@@ -12,8 +12,11 @@
 
 ## The problem
 
-Every command in the first six chapters ran with your full privileges. Whatever the model wrote,
-your machine executed.
+Your agent can run commands on your machine. **And it runs them with your full privileges** —
+whatever the model writes, your machine executes.
+
+It can write to `~/.ssh/`, `curl` any file anywhere, `rm -rf` any directory. Whenever the model
+thinks that is a good idea.
 
 The first instinct is usually: **"I'll inspect the command string and block the dangerous ones."**
 
@@ -35,7 +38,7 @@ So Codex does not judge the command. It **changes what the command is able to do
 
 ---
 
-## First: what an OS sandbox is
+## what an OS sandbox is
 
 Modern operating systems all offer this: **before starting a process, wrap it in restrictions
 that the kernel enforces, that the process cannot undo, and that its children inherit.**
