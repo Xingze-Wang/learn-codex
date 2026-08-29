@@ -116,7 +116,7 @@ python s15_harness/code.py "what does this repo do?"
 python -m pytest tests -q
 ```
 
-142 tests, no API key, no network. The tests are the second half of the documentation: each one
+143 tests, no API key, no network. The tests are the second half of the documentation: each one
 names a specific thing that would break. `tests/test_s07_sandbox.py` runs the real sandbox;
 `tests/test_s13_mcp.py` starts real MCP servers.
 
@@ -152,8 +152,20 @@ Background reading, for how others frame it:
 
 ## How to read it
 
-Chapters are standalone. Each `code.py` runs on its own and repeats whatever kernel it needs,
-so you can open s09 without having read s08. The README says which earlier kernel it builds on.
+Every chapter has the same shape, and assumes you know nothing going in:
+
+```
+The problem        a concrete thing that breaks, in plain language
+First: <concept>   the one idea you need before the code makes sense
+                   (what a PTY is, what an OS sandbox is, what JSON-RPC is...)
+The solution       a diagram, and a table of signal -> meaning -> action
+How it works       Step 1..N, each a few lines of code and a sentence saying why
+Try it             the exact command, and what to watch when you run it
+Next               the pain this leaves behind, which is the next chapter
+```
+
+Chapters are standalone. Each `code.py` runs on its own and repeats whatever kernel it needs, so
+you can open s09 without having read s08.
 
 s15 is the exception: it imports the other chapters, because composition is its subject.
 
@@ -174,7 +186,7 @@ learn-codex/
     code.py              # standalone, runnable
   ...
   s15_harness/           # imports the others
-  tests/                 # 142 tests, offline
+  tests/                 # 143 tests, offline
 ```
 
 ## Honesty about scope

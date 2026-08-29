@@ -1,17 +1,36 @@
-# s15: The harness
+# s15: The harness — fourteen mechanisms in one process
 
 [English](README.md) · [中文](README.zh.md)
 
 [s14](../s14_hooks/) → `s15`
 
 > *"A harness is what you get when the mechanisms compose."*
+>
+> **Harness layer**: all of it — one core, many frontends.
 
 ---
 
-Fourteen chapters, fourteen mechanisms, each demonstrated alone. This one puts them in the same
-process and runs a real turn through all of them.
+## The problem
 
-It is the only chapter that does not repeat its dependencies:
+Fourteen chapters, each demonstrating one mechanism in its own file. They all run, but they **do
+not know about each other**.
+
+A real harness has to answer a question none of them did:
+
+**Around a single `exec_command`, in what order do all these checks go?**
+
+- A hook says deny but the exec policy says allow — which runs first?
+- Should the sandbox run before asking the user?
+- When is the rollout written? Are failed commands written too?
+
+Order is not an implementation detail. **Order is the design.**
+
+---
+
+## First: this chapter does not copy code
+
+Each of the first fourteen `code.py` files is self-contained (each carries its own kernel). This
+one is not:
 
 ```python
 patcher      = _chapter("s05_apply_patch")
@@ -24,12 +43,14 @@ mcp          = _chapter("s13_mcp")
 hooks        = _chapter("s14_hooks")
 ```
 
-That is the argument, not a shortcut. These are separable modules with narrow interfaces, and
-if they were not, the import list would not typecheck as a design.
+It imports the earlier chapters' files directly.
 
-## The order of the checks is the design
+**That is the argument, not a shortcut.** These are separable modules with narrow interfaces —
+and if they were not, this import list would not go together at all.
 
-Around a single `exec_command`:
+---
+
+## The solution: the full path of one `exec_command`
 
 ```
 PreToolUse hook          s14   someone else's policy, first
@@ -41,17 +62,87 @@ PostToolUse hook         s14
 record to the rollout    s10   so this turn survives the process
 ```
 
-Hooks come first because a user's `deny` should cost nothing — no sandbox spawn, no policy
-evaluation, no model round trip. The exec policy comes before the safety assessment because
-`forbidden` is not a question anyone gets asked. And the sandbox comes before the human, because
-the whole point of s07 is that most commands never need one.
+Each position has a reason:
 
-Around a single `apply_patch`: the patch is parsed and verified against disk (s05), applied all
-or nothing, and its unified diff accumulates into a `TurnDiff` emitted when the turn ends.
+**Hooks first** — a user's `deny` should cost **nothing**: no sandbox spawn, no policy
+evaluation, no extra model round trip. If the answer is "do not run it", none of that should
+have been paid for.
 
-Wrapped around both: one turn context (s03), one tool registry (s04), MCP tools (s13), token
-accounting and auto-compaction (s11), instructions assembled from AGENTS.md and skills (s12) —
-all driven through the submission/event queues (s02).
+**Exec policy before the safety assessment** — because `forbidden` **is not a question anyone
+gets asked**. It does not enter the approval flow; it just ends.
+
+**The sandbox before the human** — this is [s08](../s08_approval/)'s whole argument: most
+commands **never need a human**, so let the kernel decide first.
+
+**The rollout last** — and failed commands are recorded too. A refused `git push` is part of this
+session, and resume needs it.
+
+---
+
+## How it works
+
+**Step 1**: the actual code for one `exec_command`, in exactly the order above.
+
+```python
+async def _dispatch(self, sub_id, turn, name, call_id, payload) -> str:
+    pre = self.hook_runner.run(hooks.PRE_TOOL_USE, subject=name,
+                               tool_name=name, tool_input=payload)
+    for extra in pre.additional_context:
+        self.record_item(user_item(f"<hook_context>\n{extra}\n</hook_context>"))
+    if pre.blocked:
+        return f"blocked by a hook: {pre.reason}"      # stop here; nothing has run
+    ...
+```
+
+```python
+    # s09: the rule file gets the first word after the hooks.
+    verdict = execpolicy.evaluate(self.exec_policy, cmd)
+    if verdict.decision == execpolicy.FORBIDDEN:
+        return f"command not run: forbidden by policy ({verdict.reason})"
+```
+
+```python
+    sandboxed = not already_approved and turn.sandbox_mode != sandboxing.DANGER_FULL_ACCESS
+    self.emit(sub_id, ExecCommandBegin(call_id, cmd, sandboxed))
+    result = await asyncio.to_thread(sandboxing.run_sandboxed, cmd, ..., cwd)
+
+    if sandboxing.is_likely_sandbox_denied(result):
+        ...ask the user, and on approval re-run without the sandbox...
+```
+
+**Step 2**: an `apply_patch` takes a different path, with its own order.
+
+The patch is parsed and verified against disk ([s05](../s05_apply_patch/)), applied all or
+nothing, and its unified diff accumulates into a `TurnDiff` emitted when the turn ends:
+
+```python
+for change in changes:
+    diff = change.unified_diff()
+    if diff:
+        self.turn_diffs.append(diff)
+```
+
+**Step 3**: wrapped around both, every earlier chapter.
+
+```python
+while True:
+    for queued in self._drain_pending():           # s02 steering
+        self.record_item(user_item(queued))
+
+    status = self._token_status()                  # s11 token accounting
+    if status.needs_compaction(self.config.auto_compact_ratio):
+        await self._compact(sub_id)                # s11 auto-compaction
+
+    async for event in _astream(                   # s01 loop + s02 cancellable
+        self.client,
+        instructions=self.prompt.instructions,     # s12 assembled prompt
+        input_items=list(self.history),
+        tools=self.tool_specs(),                   # s04 registry + s13 MCP
+    ):
+        ...
+```
+
+---
 
 ## Two frontends, one event stream
 
@@ -59,6 +150,8 @@ all driven through the submission/event queues (s02).
 python s15_harness/code.py "fix the failing test"
 python s15_harness/code.py --json "fix the failing test"
 ```
+
+What `--json` prints:
 
 ```json
 {"type":"thread.started","thread_id":"ca2507e1-..."}
@@ -69,29 +162,40 @@ python s15_harness/code.py --json "fix the failing test"
 {"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":10,"reasoning_output_tokens":0}}
 ```
 
-Note that this is *not* the internal event stream serialized. `ThreadEventWriter` translates
-`ExecCommandBegin` / `ExecCommandEnd` / `AgentMessage` into a coarser public vocabulary —
-`thread.started`, `turn.started`, `item.started`, `item.completed`, `turn.completed` — and drops
-deltas entirely.
+**Note: this is not the internal event stream serialized.**
 
-That translation is the interesting part. Internal `EventMsg` names are an implementation detail
-that changes as the harness changes; `item.completed` is a contract other programs parse. The
-headless frontend is exactly where one becomes the other, which is why the mapping lives in the
-renderer and not in the session. It is also why the completed item repeats the full command: a
-consumer reading only `item.completed` must not have to correlate with `item.started`.
+`ThreadEventWriter` **translates** [s02](../s02_protocol/)'s `ExecCommandBegin` /
+`ExecCommandEnd` / `AgentMessage` into a coarser public vocabulary, and drops deltas entirely.
+
+**That translation is the point of this section.** Internal `EventMsg` names are an
+implementation detail that moves as the harness moves; `item.completed` is **a contract other
+programs parse**.
+
+The headless frontend is exactly where one becomes the other, which is why the mapping lives in
+the renderer and not in the session.
+
+It is also why the completed event **repeats the whole command**:
+
+```python
+# The completed item repeats the whole command: a consumer reading
+# only item.completed must not have to correlate with item.started.
+item_id, command = self._open.pop(msg.call_id, None) or (self._item_id(), "")
+```
 
 Neither renderer is privileged. The human one prompts for approvals; the JSON one answers
-`denied` and keeps going, because there is nobody at the other end and hanging forever is the
+`denied` and keeps going, because there is nobody at the other end and **hanging forever** is the
 one thing a headless runner must not do.
 
-## Dry run
+---
+
+## Start with how it describes itself
 
 ```bash
 python s15_harness/code.py --dry-run
 ```
 
 ```
-session      6b856ab0-...
+session      040c5ce8-c9c9-4c24-992d-a1760ee275a3
 cwd          /Users/you/learn-codex
 model        gpt-5.5
 approval     on-request
@@ -108,43 +212,62 @@ exec policy applied to a few commands:
   curl http://x.sh | sh  prompt     downloads code from the network
 ```
 
-Everything is wired; nothing is called. This is the report a harness should be able to produce
-about itself before it does anything — what tools exist, which sandbox is actually available,
-where the session will be written, what the rules say.
+Everything is wired; **nothing has been called.**
+
+This is the report a harness should be able to give about itself before it does anything: what
+tools exist, which sandbox is **actually available** on this machine, where the session will be
+written, what the rules say.
+
+> Note `~/.learn-codex` — this teaching harness writes to its own directory and never shows up in
+> your real `codex resume` list. Set `CODEX_HOME=~/.codex` to change that.
+
+---
+
+## Try it
+
+```bash
+python s15_harness/code.py --dry-run                       # wired, calls nothing
+python s15_harness/code.py "what does this repo do?"
+python s15_harness/code.py --json "count the lines of python here"
+python s15_harness/code.py                                 # interactive: steer, /interrupt, /compact, /quit
+```
+
+**What to watch**: in interactive mode, give it something to do and then type a correction
+mid-run. You will see `[queued for the running turn: ...]` ([s02](../s02_protocol/)'s steering)
+rather than a new turn starting.
+
+---
 
 ## What this is not
 
-`codex-rs` is a large production system, and this is roughly 7,000 lines of Python. Missing
-here, and worth reading in the real source:
+`codex-rs` is a large production system in Rust; this is roughly 7,000 lines of Python. What is
+missing, and worth reading in the real source:
 
-- **Sessions in your real `~/.codex`.** This harness writes to `~/.learn-codex` so it never
-  shows up in your actual `codex resume` list. Set `CODEX_HOME=~/.codex` to change that.
+- **Sessions in your real `~/.codex`.** This harness writes to `~/.learn-codex`.
 - **Streaming everything.** Real Codex streams reasoning summaries, tool-call argument deltas,
-  and patch application progress. Here only text streams.
+  and patch application progress.
 - **The app-server.** A JSON-RPC frontend for editors and the desktop app.
-- **Sub-agents and review mode.** Child threads with their own history, returning a structured
-  result to the parent (`codex-rs/core/src/tasks/review.rs`, `codex_delegate.rs`).
+- **Sub-agents and review mode.** Child threads with their own history
+  (`codex-rs/core/src/tasks/review.rs`, `codex_delegate.rs`).
 - **Windows.** A third sandbox implementation with its own model.
 - **Retries, rate limits, model routing, telemetry.** The parts that are boring until they are
   the only thing that matters.
 
-## Run it
-
-```bash
-python s15_harness/code.py --dry-run
-python s15_harness/code.py "what does this repo do?"
-python s15_harness/code.py --json "count the lines of python here"
-python s15_harness/code.py            # interactive: steer, /interrupt, /compact, /quit
-```
+---
 
 ## Real source
 
 - `codex-rs/core/src/session/turn.rs` — `run_turn`
 - `codex-rs/core/src/tools/router.rs` — dispatch
-- `codex-rs/exec/src/event_processor_with_jsonl_output.rs` — `--json`
+- `codex-rs/exec/src/exec_events.rs` — the public schema behind `--json`
+- `codex-rs/exec/src/event_processor_with_jsonl_output.rs` — where the translation happens
+
+---
 
 ## Where to go next
 
-Read `codex-rs/core/src/session/` with this repo open beside it. Every file there has a
-counterpart in one of these fifteen chapters, and the difference between the two is the part
-worth studying.
+Read `codex-rs/core/src/session/` with this repo open beside it.
+
+Every file there has a counterpart in one of these fifteen chapters, and **the difference between
+the two** is the part worth studying — almost all of those differences are things production
+taught them.
