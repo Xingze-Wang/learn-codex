@@ -116,9 +116,39 @@ python s15_harness/code.py "what does this repo do?"
 python -m pytest tests -q
 ```
 
-139 tests, no API key, no network. The tests are the second half of the documentation: each one
+142 tests, no API key, no network. The tests are the second half of the documentation: each one
 names a specific thing that would break. `tests/test_s07_sandbox.py` runs the real sandbox;
 `tests/test_s13_mcp.py` starts real MCP servers.
+
+## Where Codex and Claude Code actually differ
+
+Most people arrive here having used one of the two, so it is worth naming the differences the
+public write-ups keep landing on. The line that recurs, and that this repo agrees with:
+**Codex enforces in the kernel; Claude Code enforces in the harness.**
+
+| | Codex | Claude Code |
+|---|---|---|
+| Default enforcement | An OS sandbox is on by default (seatbelt / Landlock + seccomp); the user is asked only when the kernel refuses ([s07](s07_sandbox/), [s08](s08_approval/)) | Permission rules evaluated in the harness are the primary layer, with OS sandboxing available underneath |
+| Deciding without asking | A Starlark rule file: `prefix_rule(pattern=[...], decision="allow"\|"prompt"\|"forbidden")` ([s09](s09_exec_policy/)) | Allow/deny rules in settings, matched per tool and argument |
+| Editing files | One freeform `apply_patch` tool whose grammar is enforced during decoding ([s05](s05_apply_patch/)) | Typed `Edit` / `Write` tools with old-string/new-string arguments |
+| Running commands | `exec_command` opens a PTY session that outlives the call; `write_stdin` continues it ([s06](s06_unified_exec/)) | `Bash`, with background execution and output polling |
+| Project instructions | `AGENTS.md`, concatenated project root → cwd ([s12](s12_instructions/)) | `CLAUDE.md`, with imports |
+| Session state | Append-only JSONL rollout with resume and fork ([s10](s10_rollout/)) | Transcripts with `/resume` |
+| Public surface | One Op/Event core behind four frontends — TUI, `exec --json`, app-server, MCP server ([s02](s02_protocol/), [s15](s15_harness/)) | CLI, Agent SDK, and hooks |
+
+Converging, not diverging: **MCP**, **hooks** (the JSON wire shape is nearly identical —
+`hookSpecificOutput.permissionDecision`), **compaction**, **skills**, and a **plan/todo tool**
+exist in both.
+
+The Codex column is drawn from `codex-rs`, which is open source and is what every chapter here
+cites. The Claude Code column is from its public documentation and observable behavior; it is
+not open source, so treat that column as the weaker evidence.
+
+Background reading, for how others frame it:
+[Inside the Agent Harness](https://medium.com/jonathans-musings/inside-the-agent-harness-how-codex-and-claude-code-actually-work-63593e26c176) ·
+[awesome-harness-engineering](https://github.com/ai-boost/awesome-harness-engineering) ·
+[The Anatomy of an Agent Harness](https://www.langchain.com/blog/the-anatomy-of-an-agent-harness) ·
+[Top Agent Harnesses](https://aimultiple.com/agent-harness)
 
 ## How to read it
 
@@ -144,7 +174,7 @@ learn-codex/
     code.py              # standalone, runnable
   ...
   s15_harness/           # imports the others
-  tests/                 # 139 tests, offline
+  tests/                 # 142 tests, offline
 ```
 
 ## Honesty about scope

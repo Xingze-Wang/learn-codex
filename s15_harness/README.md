@@ -60,25 +60,29 @@ python s15_harness/code.py "fix the failing test"
 python s15_harness/code.py --json "fix the failing test"
 ```
 
-```python
-async def render_json(thread, done):
-    """`codex exec --json`: one JSON object per line, nothing else on stdout."""
-    while True:
-        event = await thread.next_event()
-        print(event_to_json(event), flush=True)
+```json
+{"type":"thread.started","thread_id":"ca2507e1-..."}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_0","type":"command_execution","command":"echo hi","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_0","type":"command_execution","command":"echo hi","aggregated_output":"hi\n","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"all good"}}
+{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":10,"reasoning_output_tokens":0}}
 ```
 
-```json
-{"id":"init","msg":{"type":"session_configured","session_id":"...","tools":["exec_command","apply_patch","update_plan"]}}
-{"id":"a1b2","msg":{"type":"task_started","turn_id":"..."}}
-{"id":"a1b2","msg":{"type":"exec_command_begin","call_id":"call_1","command":"pytest -q","sandboxed":true}}
-{"id":"a1b2","msg":{"type":"task_complete","last_agent_message":"..."}}
-```
+Note that this is *not* the internal event stream serialized. `ThreadEventWriter` translates
+`ExecCommandBegin` / `ExecCommandEnd` / `AgentMessage` into a coarser public vocabulary —
+`thread.started`, `turn.started`, `item.started`, `item.completed`, `turn.completed` — and drops
+deltas entirely.
+
+That translation is the interesting part. Internal `EventMsg` names are an implementation detail
+that changes as the harness changes; `item.completed` is a contract other programs parse. The
+headless frontend is exactly where one becomes the other, which is why the mapping lives in the
+renderer and not in the session. It is also why the completed item repeats the full command: a
+consumer reading only `item.completed` must not have to correlate with `item.started`.
 
 Neither renderer is privileged. The human one prompts for approvals; the JSON one answers
 `denied` and keeps going, because there is nobody at the other end and hanging forever is the
-one thing a headless runner must not do. That difference is four lines, and it is the entire
-difference between the two frontends.
+one thing a headless runner must not do.
 
 ## Dry run
 
@@ -92,7 +96,7 @@ cwd          /Users/you/learn-codex
 model        gpt-5.5
 approval     on-request
 sandbox      workspace-write (platform: seatbelt)
-rollout      ~/.codex/sessions/2026/08/27/rollout-....jsonl
+rollout      ~/.learn-codex/sessions/<date>/rollout-*.jsonl (not created by --dry-run)
 tools        exec_command, apply_patch, update_plan
 prompt items 1 (~126 tokens)
 hooks        0 groups across 0 events
@@ -113,6 +117,8 @@ where the session will be written, what the rules say.
 `codex-rs` is a large production system, and this is roughly 7,000 lines of Python. Missing
 here, and worth reading in the real source:
 
+- **Sessions in your real `~/.codex`.** This harness writes to `~/.learn-codex` so it never
+  shows up in your actual `codex resume` list. Set `CODEX_HOME=~/.codex` to change that.
 - **Streaming everything.** Real Codex streams reasoning summaries, tool-call argument deltas,
   and patch application progress. Here only text streams.
 - **The app-server.** A JSON-RPC frontend for editors and the desktop app.

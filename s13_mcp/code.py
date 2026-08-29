@@ -22,8 +22,11 @@ The handshake is three messages, then the tools are just tools:
 
 Three harness problems come with them, and all three are the harness's job:
 
-  * **Names collide.** Two servers both export `search`. Tools are namespaced
-    by server, so the model calls `docs.search`, not `search`.
+  * **Names collide.** Two servers both export `search`. Codex groups each
+    server's tools under a `type: "namespace"` object named `mcp__docs__`, so
+    the model sees a plain `search` inside a namespace rather than a mangled
+    `docs_search`, and the router joins the two back into
+    `mcp__docs__search` on the way in.
   * **A slow server must not slow the session.** Servers start concurrently,
     each with its own timeout, and one that fails to start is reported as a
     warning -- the session runs with the tools that did come up.
@@ -74,6 +77,9 @@ class McpServerConfig:
     startup_timeout: float = DEFAULT_STARTUP_TIMEOUT
 
 
+MCP_NAMESPACE_PREFIX = "mcp__"
+
+
 @dataclass(frozen=True)
 class McpTool:
     server: str
@@ -82,20 +88,49 @@ class McpTool:
     input_schema: dict[str, Any]
 
     @property
-    def qualified_name(self) -> str:
-        return f"{self.server}.{self.name}"
+    def namespace(self) -> str:
+        """Codex namespaces carry their own separator: `mcp__demo__`."""
+        return f"{MCP_NAMESPACE_PREFIX}{self.server}__"
 
-    def to_spec(self, *, defer_loading: bool = False) -> dict[str, Any]:
-        spec = {
+    @property
+    def qualified_name(self) -> str:
+        """The flat form: `mcp__demo__lookup_order`.
+
+        This is what hooks see and what the router dispatches on. On the wire
+        the model gets the split form (a namespace object holding a plain
+        `lookup_order`), and the two are joined back together on the way in.
+        """
+        return f"{self.namespace}{self.name}"
+
+    def to_spec(self) -> dict[str, Any]:
+        """The tool as it appears *inside* a namespace object: an ordinary
+        function spec, with no trace of the server it came from."""
+        return {
             "type": "function",
             "name": self.name,
-            "namespace": self.server,
             "description": self.description,
+            "strict": False,
             "parameters": self.input_schema or {"type": "object", "properties": {}},
         }
-        if defer_loading:
-            spec["defer_loading"] = True
-        return spec
+
+
+def namespace_spec(server: str, tools: list[McpTool]) -> dict[str, Any]:
+    """One `type: "namespace"` object per server, as codex serializes it:
+
+        {"type": "namespace", "name": "mcp__demo__",
+         "description": "Tools in the mcp__demo__ namespace.",
+         "tools": [{"type": "function", "name": "lookup_order", ...}]}
+
+    Grouping rather than name-mangling is what keeps `search` from two servers
+    from being one tool with a mangled name -- and keeps each schema readable.
+    """
+    name = f"{MCP_NAMESPACE_PREFIX}{server}__"
+    return {
+        "type": "namespace",
+        "name": name,
+        "description": f"Tools in the {name} namespace.",
+        "tools": [tool.to_spec() for tool in tools],
+    }
 
 
 class StdioMcpClient:
@@ -286,6 +321,13 @@ TOOL_SEARCH_SPEC = {
 }
 
 
+def group_by_server(mcp_tools: list[McpTool]) -> list[dict[str, Any]]:
+    grouped: dict[str, list[McpTool]] = {}
+    for tool in mcp_tools:
+        grouped.setdefault(tool.server, []).append(tool)
+    return [namespace_spec(server, tools) for server, tools in grouped.items()]
+
+
 def build_tool_specs(
     builtin: list[dict[str, Any]],
     mcp_tools: list[McpTool],
@@ -295,11 +337,12 @@ def build_tool_specs(
     """Below the threshold, list everything. Above it, list nothing from MCP
     and hand the model a way to ask."""
     if len(mcp_tools) <= threshold:
-        return [*builtin, *(tool.to_spec() for tool in mcp_tools)]
+        return [*builtin, *group_by_server(mcp_tools)]
     return [*builtin, TOOL_SEARCH_SPEC]
 
 
-def search_tools(mcp_tools: list[McpTool], query: str, *, limit: int = 5) -> list[dict[str, Any]]:
+def search_tools(mcp_tools: list[McpTool], query: str, *, limit: int = 5) -> list[McpTool]:
+    """What `tool_search` returns: the tools whose schemas are worth loading."""
     terms = [term for term in query.lower().split() if term]
     scored = []
     for tool in mcp_tools:
@@ -311,7 +354,7 @@ def search_tools(mcp_tools: list[McpTool], query: str, *, limit: int = 5) -> lis
         if score:
             scored.append((score, tool))
     scored.sort(key=lambda pair: (-pair[0], pair[1].qualified_name))
-    return [tool.to_spec() for _, tool in scored[:limit]]
+    return [tool for _, tool in scored[:limit]]
 
 
 # --------------------------------------------------------------------------
@@ -404,8 +447,9 @@ def serve() -> int:
 
 
 def _label(spec: dict[str, Any]) -> str:
-    namespace = spec.get("namespace")
-    return f"{namespace}.{spec['name']}" if namespace else spec["name"]
+    if spec.get("type") == "namespace":
+        return spec["name"] + "{" + ", ".join(t["name"] for t in spec["tools"]) + "}"
+    return spec.get("name", spec["type"])
 
 
 def demo() -> int:
@@ -424,14 +468,14 @@ def demo() -> int:
 
     print("\ntools (namespaced by server, so `search` twice is not a collision):")
     for name, tool in sorted(manager.tools.items()):
-        print(f"  {name:<20} {tool.description}")
+        print(f"  {name:<24} {tool.description}")
 
-    print("\ncalling handbook.search:")
-    print(" ", manager.call("handbook.search", {"query": "deploy"}))
-    print("calling wiki.oncall:")
-    print(" ", manager.call("wiki.oncall", {"service": "billing"}))
+    print("\ncalling mcp__handbook__search:")
+    print(" ", manager.call("mcp__handbook__search", {"query": "deploy"}))
+    print("calling mcp__wiki__oncall:")
+    print(" ", manager.call("mcp__wiki__oncall", {"service": "billing"}))
     print("calling a tool that does not exist:")
-    print(" ", manager.call("handbook.nope", {}))
+    print(" ", manager.call("mcp__handbook__nope", {}))
 
     tools = list(manager.tools.values())
     builtin = [{"type": "function", "name": "exec_command"}]
@@ -445,7 +489,7 @@ def demo() -> int:
     print(f"\nwith {len(many)} MCP tools, threshold 8:")
     print("  request carries:", [_label(spec) for spec in build_tool_specs(builtin, many)])
     found = search_tools(many, "tool7")
-    print("  tool_search('tool7') ->", [_label(spec) for spec in found])
+    print("  tool_search('tool7') ->", [tool.qualified_name for tool in found])
 
     manager.close_all()
     return 0

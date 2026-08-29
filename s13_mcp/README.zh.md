@@ -33,17 +33,30 @@ args = ["tools/docs_server.py"]
 
 ## 它们同时带来三个 harness 问题
 
-**名字会撞。** 两个 server 都导出了 `search`：
+**名字会撞。** 两个 server 都导出了 `search`。Codex 不做名字拼接改写，
+而是把每个 server 的工具打包进一个 `type: "namespace"` 对象发出去：
+
+```json
+{"type": "namespace",
+ "name": "mcp__handbook__",
+ "description": "Tools in the mcp__handbook__ namespace.",
+ "tools": [{"type": "function", "name": "search", "parameters": {...}},
+           {"type": "function", "name": "oncall", "parameters": {...}}]}
+```
+
+在命名空间内部，这个工具就是一个朴素的 `search`，所以它的 schema 和描述保持可读。
+回程时，响应项里 `namespace` 和 `name` 是分开的（`ToolName { namespace, name }`），
+路由把它们拼成 hook 和分发使用的扁平名：
 
 ```
-handbook.oncall      Who is on call for a service right now.
-handbook.search      Search the team handbook for a phrase.
-wiki.oncall          Who is on call for a service right now.
-wiki.search          Search the team handbook for a phrase.
+mcp__handbook__search
+mcp__handbook__oncall
+mcp__wiki__search
+mcp__wiki__oncall
 ```
 
-Codex 在名字旁边单独带一个 namespace（`ToolName { namespace, name }`），而不是把两者拼成一个字符串，
-于是模型调用的是 `wiki` 命名空间下的 `search`，而路由知道该找哪个进程。
+末尾那个 `__` 是**命名空间字符串自带的**，这也是为什么拼接就是直接拼、
+而不是用带分隔符的 `format!`。
 
 **慢的 server 不能拖慢会话。**
 
@@ -59,11 +72,11 @@ server 并发启动，各有各的超时，失败只是一条警告。
 
 ```
 with 4 MCP tools, threshold 8:
-  request carries: ['exec_command', 'wiki.search', 'wiki.oncall', 'handbook.search', 'handbook.oncall']
+  request carries: ['exec_command', 'mcp__wiki__{search, oncall}', 'mcp__handbook__{search, oncall}']
 
 with 20 MCP tools, threshold 8:
   request carries: ['exec_command', 'tool_search']
-  tool_search('tool7') -> ['server7.tool7']
+  tool_search('tool7') -> ['mcp__server7__tool7']
 ```
 
 超过阈值，Codex 就不再罗列它们，而是暴露一个 `tool_search` 工具：模型自己去要，然后拿回 schema。
@@ -101,7 +114,7 @@ if result.get("isError"):
 |---|---|
 | `StdioMcpClient` | 握手、`tools/list`、`tools/call` |
 | `McpConnectionManager` | 并发启动、逐 server 失败、分发 |
-| `McpTool.to_spec` | 带命名空间的工具 spec |
+| `McpTool.to_spec` / `namespace_spec` | 朴素的 function spec，再打包进 `type: "namespace"` 对象 |
 | `build_tool_specs` / `search_tools` | 要么全列，要么变成可搜索的 |
 | `serve` | 40 行的一个真 MCP server |
 

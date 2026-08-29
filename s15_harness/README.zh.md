@@ -58,24 +58,27 @@ python s15_harness/code.py "把那个挂掉的测试修好"
 python s15_harness/code.py --json "把那个挂掉的测试修好"
 ```
 
-```python
-async def render_json(thread, done):
-    """`codex exec --json`：每行一个 JSON 对象，stdout 上别无他物。"""
-    while True:
-        event = await thread.next_event()
-        print(event_to_json(event), flush=True)
+```json
+{"type":"thread.started","thread_id":"ca2507e1-..."}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_0","type":"command_execution","command":"echo hi","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_0","type":"command_execution","command":"echo hi","aggregated_output":"hi\n","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"all good"}}
+{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":10,"reasoning_output_tokens":0}}
 ```
 
-```json
-{"id":"init","msg":{"type":"session_configured","session_id":"...","tools":["exec_command","apply_patch","update_plan"]}}
-{"id":"a1b2","msg":{"type":"task_started","turn_id":"..."}}
-{"id":"a1b2","msg":{"type":"exec_command_begin","call_id":"call_1","command":"pytest -q","sandboxed":true}}
-{"id":"a1b2","msg":{"type":"task_complete","last_agent_message":"..."}}
-```
+注意：这**不是**把内部事件流直接序列化。`ThreadEventWriter` 把
+`ExecCommandBegin` / `ExecCommandEnd` / `AgentMessage` 翻译成一套更粗粒度的公开词汇——
+`thread.started`、`turn.started`、`item.started`、`item.completed`、`turn.completed`——
+并且把 delta 全部丢掉。
+
+**这次翻译才是有意思的部分。** 内部的 `EventMsg` 名字是随 harness 演进而变的实现细节；
+`item.completed` 则是别的程序会去解析的**契约**。headless 前端正是"从前者变成后者"的那个位置，
+所以这套映射住在渲染器里，而不是 session 里。这也是为什么完成事件里要把整条命令再带一遍：
+一个只读 `item.completed` 的消费者，不应该被迫去和 `item.started` 做关联。
 
 两个渲染器谁都不特殊。人用的那个会弹审批；JSON 那个直接回 `denied` 然后继续，
 因为对面根本没有人，而**永远挂住**恰恰是一个 headless runner 唯一不能做的事。
-这个差别只有四行代码，而这四行就是两个前端的全部差别。
 
 ## Dry run
 
@@ -89,7 +92,7 @@ cwd          /Users/you/learn-codex
 model        gpt-5.5
 approval     on-request
 sandbox      workspace-write (platform: seatbelt)
-rollout      ~/.codex/sessions/2026/08/27/rollout-....jsonl
+rollout      ~/.learn-codex/sessions/<date>/rollout-*.jsonl (not created by --dry-run)
 tools        exec_command, apply_patch, update_plan
 prompt items 1 (~126 tokens)
 hooks        0 groups across 0 events
@@ -108,6 +111,8 @@ exec policy applied to a few commands:
 
 `codex-rs` 是一个大型生产系统，而这里大约是 7000 行 Python。这里没有、值得去真实源码里读的：
 
+- **写进你真实的 `~/.codex`。** 这个 harness 写的是 `~/.learn-codex`，
+  所以它不会出现在你真正的 `codex resume` 列表里。想改就设 `CODEX_HOME=~/.codex`。
 - **把一切都流式化。** 真实 Codex 会流式输出推理摘要、工具调用参数的增量、patch 应用进度。
   这里只有文本是流式的。
 - **app-server。** 给编辑器和桌面端用的 JSON-RPC 前端。

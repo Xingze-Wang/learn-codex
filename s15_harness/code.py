@@ -32,7 +32,9 @@ Two frontends read the same event stream, which is the point of s02:
     python s15_harness/code.py --json "fix the failing test"   # one JSON event per line
     python s15_harness/code.py --dry-run                       # wire everything, call no model
 
-`--json` is `codex exec --json`: the same core, a different reader.
+`--json` is `codex exec --json`: the same core, a different reader -- and a coarser,
+stable schema (thread.started / item.completed / turn.completed) rather than the
+internal event names.
 
 Real source: codex-rs/core/src/session/turn.rs (run_turn), codex-rs/core/src/tools/router.rs,
 codex-rs/exec/src/event_processor_with_jsonl_output.rs
@@ -49,12 +51,15 @@ import threading
 import time
 import uuid
 from collections.abc import AsyncIterator, Iterator
-from dataclasses import asdict, dataclass, field, is_dataclass
+from dataclasses import asdict, dataclass, field, is_dataclass, replace
 from pathlib import Path
 from typing import Any, Protocol
 
 DEFAULT_MODEL = os.environ.get("CODEX_MODEL", "gpt-5.5")
-CODEX_HOME = os.environ.get("CODEX_HOME", os.path.expanduser("~/.codex"))
+# Sessions written by this repo go to ~/.learn-codex, not ~/.codex: a teaching
+# harness has no business appearing in your real `codex resume` list. Point
+# CODEX_HOME at ~/.codex to read (and write) the real one.
+CODEX_HOME = os.environ.get("CODEX_HOME", os.path.expanduser("~/.learn-codex"))
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -341,6 +346,8 @@ class McpToolCallEnd:
 class TokenCount:
     used: int
     window: int
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 @dataclass(frozen=True)
@@ -472,6 +479,8 @@ class Session:
         self.turn_diffs: list[str] = []
         self.active: asyncio.Task[None] | None = None
         self.compactions = 0
+        self.input_tokens = 0
+        self.output_tokens = 0
 
         # s09, s12, s13, s14, s10 -- built once, read every turn.
         self.exec_policy = execpolicy.default_policy()
@@ -523,7 +532,13 @@ class Session:
         return mcp.build_tool_specs(builtin, list(self.mcp.tools.values()))
 
     def tool_names(self) -> list[str]:
-        return [spec.get("name", spec["type"]) for spec in self.tool_specs()]
+        names = []
+        for spec in self.tool_specs():
+            if spec.get("type") == "namespace":
+                names.extend(spec["name"] + tool["name"] for tool in spec["tools"])
+            else:
+                names.append(spec.get("name", spec["type"]))
+        return names
 
     # -- event plumbing --------------------------------------------------
 
@@ -592,7 +607,17 @@ class Session:
                             self.emit(sub_id, AgentMessage(last_message))
                             self.record_event("agent_message", message=last_message)
                     elif isinstance(event, Completed):
-                        self.emit(sub_id, TokenCount(self._token_status().used, self.config.context_window))
+                        self.input_tokens += event.input_tokens
+                        self.output_tokens += event.output_tokens
+                        self.emit(
+                            sub_id,
+                            TokenCount(
+                                self._token_status().used,
+                                self.config.context_window,
+                                self.input_tokens,
+                                self.output_tokens,
+                            ),
+                        )
 
                 if not calls:
                     if self.pending_input:
@@ -790,15 +815,27 @@ class Session:
         self.mcp.close_all()
 
 
+def _tool_name(item: dict[str, Any]) -> str:
+    """Rejoin the split name.
+
+    A namespaced tool (s13) arrives as {"namespace": "mcp__wiki__", "name":
+    "search"}; the router dispatches on the flat "mcp__wiki__search". Codex
+    does the same join in ToolName::new(namespace, name).
+    """
+    name = item.get("name", "")
+    namespace = item.get("namespace") or ""
+    return f"{namespace}{name}" if namespace not in ("", "functions") else name
+
+
 def _build_tool_call(item: dict[str, Any]) -> tuple[str, str, Any] | None:
     if item.get("type") == "function_call":
         try:
             args = json.loads(item.get("arguments") or "{}")
         except json.JSONDecodeError:
             args = {}
-        return item.get("name", ""), item.get("call_id", ""), args
+        return _tool_name(item), item.get("call_id", ""), args
     if item.get("type") == "custom_tool_call":
-        return item.get("name", ""), item.get("call_id", ""), item.get("input", "")
+        return _tool_name(item), item.get("call_id", ""), item.get("input", "")
     return None
 
 
@@ -871,6 +908,8 @@ class CodexThread:
 
 
 def event_to_json(event: Event) -> str:
+    """The raw internal event, for debugging. `--json` emits the public
+    ThreadEvent schema instead; see ThreadEventWriter."""
     msg = event.msg
     payload = asdict(msg) if is_dataclass(msg) else {}
     return json.dumps(
@@ -947,11 +986,95 @@ async def render_human(thread: CodexThread, done: asyncio.Event, *, interactive:
             return
 
 
+class ThreadEventWriter:
+    """Translate internal events into the public `codex exec --json` schema.
+
+        thread.started -> turn.started -> item.started / item.completed -> turn.completed
+
+    Internal `EventMsg` names are an implementation detail and change with the
+    harness. `item.completed` is a contract other programs parse. The headless
+    frontend is exactly where one becomes the other -- which is why the
+    translation lives here and not in the session.
+
+    Deltas have no place in this schema: a consumer that wanted a token stream
+    would not be parsing JSONL.
+    """
+
+    def __init__(self) -> None:
+        self._next_id = 0
+        self._open: dict[str, tuple[str, str]] = {}  # call_id -> (item id, command)
+        self._usage = {"input_tokens": 0, "cached_input_tokens": 0,
+                       "cache_write_input_tokens": 0, "output_tokens": 0,
+                       "reasoning_output_tokens": 0}
+
+    def _item_id(self) -> str:
+        item_id = f"item_{self._next_id}"
+        self._next_id += 1
+        return item_id
+
+    def translate(self, msg: Any) -> list[dict[str, Any]]:
+        if isinstance(msg, SessionConfigured):
+            return [{"type": "thread.started", "thread_id": msg.session_id}]
+        if isinstance(msg, TaskStarted):
+            return [{"type": "turn.started"}]
+
+        if isinstance(msg, ExecCommandBegin):
+            item_id = self._item_id()
+            self._open[msg.call_id] = (item_id, msg.command)
+            return [{"type": "item.started", "item": {
+                "id": item_id, "type": "command_execution", "command": msg.command,
+                "aggregated_output": "", "exit_code": None, "status": "in_progress"}}]
+        if isinstance(msg, ExecCommandEnd):
+            # The completed item repeats the whole command: a consumer reading
+            # only item.completed must not have to correlate with item.started.
+            item_id, command = self._open.pop(msg.call_id, None) or (self._item_id(), "")
+            return [{"type": "item.completed", "item": {
+                "id": item_id, "type": "command_execution", "command": command,
+                "aggregated_output": msg.output, "exit_code": msg.exit_code,
+                "status": "completed" if msg.exit_code == 0 else "failed"}}]
+
+        if isinstance(msg, AgentMessage):
+            return [{"type": "item.completed", "item": {
+                "id": self._item_id(), "type": "agent_message", "text": msg.message}}]
+        if isinstance(msg, PatchApplyEnd):
+            return [{"type": "item.completed", "item": {
+                "id": self._item_id(), "type": "file_change",
+                "changes": [{"path": path, "kind": "update"} for path in msg.files],
+                "status": "completed" if msg.success else "failed"}}]
+        if isinstance(msg, PlanUpdate):
+            return [{"type": "item.completed", "item": {
+                "id": self._item_id(), "type": "todo_list",
+                "items": [{"text": step.get("step", ""),
+                           "completed": step.get("status") == "completed"}
+                          for step in msg.plan]}}]
+        if isinstance(msg, McpToolCallEnd):
+            server, _, tool = msg.tool.partition("__")
+            return [{"type": "item.completed", "item": {
+                "id": self._item_id(), "type": "mcp_tool_call",
+                "server": server, "tool": tool, "arguments": {},
+                "result": {"content": [{"type": "text", "text": msg.output}]},
+                "error": None, "status": "completed"}}]
+
+        if isinstance(msg, TokenCount):
+            self._usage["input_tokens"] = msg.input_tokens
+            self._usage["output_tokens"] = msg.output_tokens
+            return []
+        if isinstance(msg, TaskComplete):
+            return [{"type": "turn.completed", "usage": dict(self._usage)}]
+        if isinstance(msg, TurnAborted):
+            return [{"type": "turn.failed", "error": {"message": msg.reason}}]
+        if isinstance(msg, ErrorEvent):
+            return [{"type": "error", "message": msg.message}]
+        return []
+
+
 async def render_json(thread: CodexThread, done: asyncio.Event) -> None:
     """`codex exec --json`: one JSON object per line, nothing else on stdout."""
+    writer = ThreadEventWriter()
     while True:
         event = await thread.next_event()
-        print(event_to_json(event), flush=True)
+        for line in writer.translate(event.msg):
+            print(json.dumps(line, ensure_ascii=False), flush=True)
         if isinstance(event.msg, ExecApprovalRequest):
             # No human here: refuse rather than hang.
             await thread.submit(ExecApproval(event.msg.call_id, "denied"))
@@ -973,13 +1096,15 @@ def dry_run(config: Config) -> int:
         def stream(self, **kwargs: Any) -> Iterator[Any]:
             raise AssertionError("--dry-run must not call the model")
 
+    # A dry run reports where the rollout would go; it does not create one.
+    config = replace(config, record_rollout=False)
     session = Session(Unused(), config)
     print(f"session      {session.session_id}")
     print(f"cwd          {config.cwd}")
     print(f"model        {config.model}")
     print(f"approval     {config.approval_policy}")
     print(f"sandbox      {config.sandbox_mode} (platform: {sandboxing.platform_sandbox() or 'none'})")
-    print(f"rollout      {session.recorder.path if session.recorder else '(disabled)'}")
+    print(f"rollout      {config.codex_home}/sessions/<date>/rollout-*.jsonl (not created by --dry-run)")
     print(f"tools        {', '.join(session.tool_names())}")
     print(f"prompt items {len(session.prompt.items)} (~{session.prompt.token_estimate()} tokens)")
     print(f"hooks        {sum(len(g) for g in session.hook_runner.config.groups.values())} "

@@ -104,6 +104,11 @@ Two patches racing on one file is a merge conflict with extra steps. Two shell c
 in one working directory is worse. Read-only tools can overlap; anything that mutates the
 workspace is serialized.
 
+The registry here records the flag but the loop still executes calls one at a time — the real
+router uses it to batch the calls that may overlap
+(`ToolRouter::tool_supports_parallel`). Recording it separately is the part worth copying:
+whether a tool is safe to run concurrently is a property of the tool, not of the call site.
+
 ## In `code.py`
 
 | Piece | Job |

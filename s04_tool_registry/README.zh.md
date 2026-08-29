@@ -100,6 +100,10 @@ assert reg.supports_parallel("apply_patch") is False
 两份 patch 在同一个文件上竞争，等于一次带额外步骤的合并冲突。两条 shell 命令在同一个工作目录里竞争，
 更糟。只读工具可以重叠；任何会改动工作区的东西一律串行。
 
+这里的注册表只是**记录**了这个标志，循环本身仍然逐个执行；真实的 router 用它来把可重叠的调用批量并发
+（`ToolRouter::tool_supports_parallel`）。值得抄的正是"单独记录"这件事：
+一个工具能不能并发，是**工具的属性**，不是调用点的属性。
+
 ## `code.py` 里有什么
 
 | 部件 | 作用 |

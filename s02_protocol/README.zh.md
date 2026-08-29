@@ -76,6 +76,11 @@ TUI 把它渲染成带颜色的提示符，`--json` 把它打印成一个对象�
 
 每个 `Event` 都带着触发它的那条 submission 的 `id`，所以同时有多条未决提交的调用方能分清谁是谁的答复。
 
+再往上一层，别的程序真正消费的表面要粗得多：`codex exec --json` 和 app-server 说的是
+**Thread / Turn / Item** 这套词汇（`thread.started`、`turn.started`、`item.completed`、
+`turn.completed`），而不是这里的内部名字。[s15](../s15_harness/) 实现了那次翻译；
+它存在的理由是：内部事件名可以随时改，而一份已发布的 schema 不行。
+
 ## `code.py` 里有什么
 
 | 部件 | 作用 |

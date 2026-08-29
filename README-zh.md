@@ -112,9 +112,36 @@ python s15_harness/code.py "这个仓库是干嘛的？"
 python -m pytest tests -q
 ```
 
-139 个测试，不需要 API key，不需要联网。测试是文档的另一半：
+142 个测试，不需要 API key，不需要联网。测试是文档的另一半：
 每一个都点名了一件"会坏掉的具体事情"。`tests/test_s07_sandbox.py` 跑的是真沙箱，
 `tests/test_s13_mcp.py` 起的是真 MCP server。
+
+## Codex 和 Claude Code 到底差在哪
+
+大多数人来到这里之前都用过其中一个，所以值得把公开讨论反复落到的那几个差别说清楚。
+反复出现、而且这个仓库也认同的一句话是：**Codex 在内核里强制，Claude Code 在 harness 里强制。**
+
+| | Codex | Claude Code |
+|---|---|---|
+| 默认强制点 | 默认就开着操作系统沙箱（seatbelt / Landlock + seccomp）；只有内核拒绝时才问用户（[s07](s07_sandbox/)、[s08](s08_approval/)） | 主要层是 harness 里评估的权限规则，底下可以再叠操作系统沙箱 |
+| 不问也能决定 | 一份 Starlark 规则文件：`prefix_rule(pattern=[...], decision="allow"\|"prompt"\|"forbidden")`（[s09](s09_exec_policy/)） | settings 里的 allow/deny 规则，按工具和参数匹配 |
+| 改文件 | 一个 freeform 的 `apply_patch`，文法在解码阶段就被强制（[s05](s05_apply_patch/)） | 带 old-string/new-string 参数的 `Edit` / `Write` 类型化工具 |
+| 跑命令 | `exec_command` 打开一个活过本次调用的 PTY 会话，用 `write_stdin` 继续（[s06](s06_unified_exec/)） | `Bash`，支持后台执行与输出轮询 |
+| 项目指令 | `AGENTS.md`，从项目根拼接到 cwd（[s12](s12_instructions/)） | `CLAUDE.md`，支持 import |
+| 会话状态 | 只追加的 JSONL rollout，支持 resume 与 fork（[s10](s10_rollout/)） | transcript 加 `/resume` |
+| 对外表面 | 一个 Op/Event 内核后面挂四个前端——TUI、`exec --json`、app-server、MCP server（[s02](s02_protocol/)、[s15](s15_harness/)） | CLI、Agent SDK、hooks |
+
+正在**收敛**而不是发散的部分：**MCP**、**hooks**（JSON 线上格式几乎一模一样——
+`hookSpecificOutput.permissionDecision`）、**上下文压缩**、**skills**、**plan/todo 工具**，两边都有。
+
+Codex 那一列来自开源的 `codex-rs`，也就是本仓库每一章引用的东西。
+Claude Code 那一列来自它的公开文档和可观察行为；它不开源，所以**那一列的证据强度更弱**，请据此看待。
+
+别人是怎么讲这件事的，可作背景阅读：
+[Inside the Agent Harness](https://medium.com/jonathans-musings/inside-the-agent-harness-how-codex-and-claude-code-actually-work-63593e26c176) ·
+[awesome-harness-engineering](https://github.com/ai-boost/awesome-harness-engineering) ·
+[The Anatomy of an Agent Harness](https://www.langchain.com/blog/the-anatomy-of-an-agent-harness) ·
+[Top Agent Harnesses](https://aimultiple.com/agent-harness)
 
 ## 怎么读
 
@@ -140,7 +167,7 @@ learn-codex/
     code.py              # 独立、可运行
   ...
   s15_harness/           # import 其它章节
-  tests/                 # 139 个离线测试
+  tests/                 # 142 个离线测试
 ```
 
 ## 关于范围，说实话

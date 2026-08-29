@@ -155,21 +155,69 @@ async def test_mid_turn_message_steers_the_running_turn(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_json_frontend_emits_one_object_per_event(tmp_path, capsys):
-    client = ScriptedClient(mod, [say(mod, "hi")])
+async def test_json_frontend_emits_the_public_thread_event_schema(tmp_path, capsys):
+    client = ScriptedClient(mod, [call(mod, "echo hi"), say(mod, "done")])
     thread = mod.CodexThread(client, config(tmp_path))
     thread.start()
     done = asyncio.Event()
     renderer = asyncio.create_task(mod.render_json(thread, done))
     await thread.submit(mod.UserTurn("hello"))
+    await asyncio.wait_for(done.wait(), timeout=10)
+    renderer.cancel()
+
+    parsed = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
+    kinds = [event["type"] for event in parsed]
+
+    assert kinds[0] == "thread.started"
+    assert kinds[1] == "turn.started"
+    assert kinds[-1] == "turn.completed"
+    assert "item.started" in kinds and "item.completed" in kinds
+
+    started = next(e for e in parsed if e["type"] == "item.started")
+    assert started["item"]["type"] == "command_execution"
+    assert started["item"]["status"] == "in_progress"
+
+    finished = next(
+        e for e in parsed
+        if e["type"] == "item.completed" and e["item"]["type"] == "command_execution"
+    )
+    assert finished["item"]["id"] == started["item"]["id"]  # same item, two events
+    assert finished["item"]["exit_code"] == 0
+    assert finished["item"]["status"] == "completed"
+
+    message = next(
+        e for e in parsed
+        if e["type"] == "item.completed" and e["item"]["type"] == "agent_message"
+    )
+    assert message["item"]["text"] == "done"
+
+
+@pytest.mark.asyncio
+async def test_json_frontend_drops_deltas(tmp_path, capsys):
+    client = ScriptedClient(mod, [say(mod, "streamed")])
+    thread = mod.CodexThread(client, config(tmp_path))
+    thread.start()
+    done = asyncio.Event()
+    renderer = asyncio.create_task(mod.render_json(thread, done))
+    await thread.submit(mod.UserTurn("hi"))
     await asyncio.wait_for(done.wait(), timeout=5)
     renderer.cancel()
 
-    lines = [line for line in capsys.readouterr().out.splitlines() if line.strip()]
-    parsed = [json.loads(line) for line in lines]
-    assert parsed[0]["msg"]["type"] == "session_configured"
-    assert parsed[-1]["msg"]["type"] == "task_complete"
-    assert all("id" in item and "msg" in item for item in parsed)
+    parsed = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
+    # The session emitted AgentMessageDelta; the public schema has no such event.
+    assert not any("delta" in event["type"] for event in parsed)
+
+
+def test_thread_event_writer_maps_a_failed_patch(tmp_path):
+    writer = mod.ThreadEventWriter()
+    events = writer.translate(mod.PatchApplyEnd("c1", ["a.py"], False))
+    assert events[0]["type"] == "item.completed"
+    assert events[0]["item"] == {
+        "id": "item_0",
+        "type": "file_change",
+        "changes": [{"path": "a.py", "kind": "update"}],
+        "status": "failed",
+    }
 
 
 @pytest.mark.asyncio

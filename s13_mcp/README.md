@@ -34,18 +34,31 @@ plus one that does not exist.
 
 ## Three harness problems come with them
 
-**Names collide.** Two servers both export `search`:
+**Names collide.** Two servers both export `search`. Codex does not mangle the names — it sends
+each server's tools grouped inside a `type: "namespace"` object:
+
+```json
+{"type": "namespace",
+ "name": "mcp__handbook__",
+ "description": "Tools in the mcp__handbook__ namespace.",
+ "tools": [{"type": "function", "name": "search", "parameters": {...}},
+           {"type": "function", "name": "oncall", "parameters": {...}}]}
+```
+
+Inside the namespace the tool is a plain `search`, so its schema and description stay readable.
+On the way back in, the response item carries `namespace` and `name` separately
+(`ToolName { namespace, name }`) and the router joins them into the flat form that hooks and
+dispatch use:
 
 ```
-handbook.oncall      Who is on call for a service right now.
-handbook.search      Search the team handbook for a phrase.
-wiki.oncall          Who is on call for a service right now.
-wiki.search          Search the team handbook for a phrase.
+mcp__handbook__search
+mcp__handbook__oncall
+mcp__wiki__search
+mcp__wiki__oncall
 ```
 
-Codex carries a namespace alongside the name (`ToolName { namespace, name }`) rather than
-mangling them into one string, so the model calls `search` in the `wiki` namespace and the
-router knows which process to reach.
+The trailing `__` lives in the namespace string itself, which is why joining is concatenation
+and not a `format!` with a separator.
 
 **A slow server must not slow the session.**
 
@@ -61,11 +74,11 @@ servers and one typo in a config file should produce nine working servers.
 
 ```
 with 4 MCP tools, threshold 8:
-  request carries: ['exec_command', 'wiki.search', 'wiki.oncall', 'handbook.search', 'handbook.oncall']
+  request carries: ['exec_command', 'mcp__wiki__{search, oncall}', 'mcp__handbook__{search, oncall}']
 
 with 20 MCP tools, threshold 8:
   request carries: ['exec_command', 'tool_search']
-  tool_search('tool7') -> ['server7.tool7']
+  tool_search('tool7') -> ['mcp__server7__tool7']
 ```
 
 Past a threshold, Codex stops listing them and exposes a `tool_search` tool: the model asks for
@@ -104,7 +117,7 @@ reads it and adjusts. Only the transport dying is an actual error.
 |---|---|
 | `StdioMcpClient` | Handshake, `tools/list`, `tools/call` |
 | `McpConnectionManager` | Concurrent startup, per-server failure, dispatch |
-| `McpTool.to_spec` | Namespaced tool spec for the request |
+| `McpTool.to_spec` / `namespace_spec` | A plain function spec, grouped into a `type: "namespace"` object |
 | `build_tool_specs` / `search_tools` | List them, or make them searchable |
 | `serve` | A real MCP server in 40 lines |
 

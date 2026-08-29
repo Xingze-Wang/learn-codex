@@ -81,6 +81,12 @@ The moment an event carries pre-rendered text, there is only one frontend.
 Every `Event` carries the `id` of the submission that caused it, so a caller with several
 outstanding submissions can tell the answers apart.
 
+One layer up, the surface other programs actually consume is coarser: `codex exec --json` and
+the app-server speak a **Thread / Turn / Item** vocabulary (`thread.started`, `turn.started`,
+`item.completed`, `turn.completed`) rather than these internal names. [s15](../s15_harness/)
+implements that translation, and the reason it exists is that internal event names are free to
+change while a published schema is not.
+
 ## In `code.py`
 
 | Piece | Job |
