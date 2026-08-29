@@ -79,3 +79,38 @@ def test_large_output_is_capped_and_counted(manager):
 def test_yield_time_is_clamped(manager):
     result = manager.exec_command("echo x", yield_time_ms=1)
     assert result.output is not None  # 1ms is clamped up to MIN_YIELD_MS, not honored literally
+
+
+def test_a_closed_pty_waits_for_the_exit_status(manager):
+    """The pty closing and the process being reaped are separate events.
+
+    Reading only `poll()` reports a live session id for a command that has
+    already finished -- rare, but it showed up as a flaky test under load.
+    """
+    import os
+    import pty
+    import subprocess
+    import time
+
+    master_fd, slave_fd = pty.openpty()
+    # Still running when _result is called, but the pty is already marked closed.
+    process = subprocess.Popen(["/bin/sh", "-c", "sleep 0.2"], stdin=slave_fd,
+                               stdout=slave_fd, stderr=slave_fd, start_new_session=True)
+    os.close(slave_fd)
+    session = mod.ExecSession(
+        session_id="test",
+        process=process,
+        master_fd=master_fd,
+        command="sleep 0.2",
+        cwd=".",
+        buffer=mod.HeadTailBuffer(1000),
+        pty_closed=True,
+    )
+    manager.sessions[session.session_id] = session
+
+    assert process.poll() is None            # not reaped yet
+    result = manager._result(session, time.monotonic())
+
+    assert result.exit_code == 0             # we waited for the status
+    assert result.session_id is None         # not reported as a live session
+    assert manager.sessions == {}

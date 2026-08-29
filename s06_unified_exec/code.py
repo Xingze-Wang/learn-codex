@@ -117,6 +117,9 @@ class ExecSession:
     cwd: str
     buffer: HeadTailBuffer
     closed: bool = False
+    # The pty reported EOF/EIO. The child is gone, but the OS may not have
+    # reaped it yet -- these are two separate events, milliseconds apart.
+    pty_closed: bool = False
 
     def read_available(self, deadline: float) -> None:
         """Drain the PTY until the process exits, output goes quiet, or time is up."""
@@ -135,9 +138,11 @@ class ExecSession:
                     chunk = os.read(self.master_fd, 65536)
                 except OSError as exc:
                     if exc.errno in (errno.EIO, errno.EBADF):
-                        break  # the child closed the pty: it is gone
+                        self.pty_closed = True  # the child closed the pty: it is gone
+                        break
                     raise
                 if not chunk:
+                    self.pty_closed = True
                     break
                 self.buffer.append(chunk.decode("utf-8", "replace"))
                 last_output = time.monotonic()
@@ -274,6 +279,14 @@ class ProcessManager:
         )
 
         exit_code = session.process.poll()
+        if exit_code is None and session.pty_closed:
+            # The pty closed, so the command really did finish; wait briefly for
+            # the exit status rather than reporting a live session that is not.
+            # Under load this window is wide enough to matter.
+            try:
+                exit_code = session.process.wait(timeout=1.0)
+            except subprocess.TimeoutExpired:
+                exit_code = None
         if exit_code is None:
             return ExecResult(raw, wall_time, session_id=session.session_id,
                               original_tokens=original_tokens)
