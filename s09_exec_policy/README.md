@@ -234,6 +234,19 @@ Note that the justification names an **alternative**. The model reads that strin
 
 ---
 
+## What changed
+
+|  | Before this chapter | After it |
+|---|---|---|
+| Deciding | ask a human every time | look it up in a rule file |
+| Matching | regex on the raw string (bypassable) | split into segments, then prefix-match |
+| `ls && sudo rm -rf /` | allowed — it starts with `ls` | forbidden — the strictest segment wins |
+| A command it cannot parse | guess | fall back to asking |
+| "Never do X" | a prompt someone will approve at 2am | `forbidden`, decided before the shell |
+| A rule that no longer works | found in production | fails at load time via `match` / `not_match` |
+
+---
+
 ## Try it
 
 **No API key needed:**

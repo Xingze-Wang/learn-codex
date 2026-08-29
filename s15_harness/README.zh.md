@@ -216,6 +216,17 @@ exec policy applied to a few commands:
 
 ---
 
+## 这一章改变了什么
+
+|  | 这一章之前 | 这一章之后 |
+|---|---|---|
+| 这些机制 | 十四个独立文件 | 同一个进程，互相 import |
+| 检查的顺序 | 没定义过 | hook → policy → 评估 → 沙箱 → 提权 → hook → rollout |
+| 前端 | 每章一个 | 人类前端 和 `--json`，读同一条流 |
+| `--json` 发什么 | — | 公开的 thread/turn/item schema，不是内部事件名 |
+
+---
+
 ## 试一下
 
 ```bash

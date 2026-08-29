@@ -116,7 +116,7 @@ async def _ask(self, sub_id, call_id, cmd, cwd, reason, justification) -> str:
         self.pending_approvals.pop(call_id, None)
 ```
 
-`await future` 是「这个协程停在这里，直到有人把结果填进去」。
+`await future` 是「这个函数停在这里，直到有人把结果填进去」。
 **它不占用线程，不阻塞事件循环** —— 别的 Op 照样能被处理，`/interrupt` 照样有效。
 
 答案后来作为**同一条队列上的另一条提交**到达：
@@ -185,6 +185,18 @@ if self.approval_policy == NEVER:
 | `Session._exec_with_approval` | 上面那六步 |
 | `_ask` / `resolve_approval` | 挂在一轮里的 future，由一个 Op 来兑现 |
 | `approved` | 会话级的审批缓存 |
+
+---
+
+## 这一章改变了什么
+
+|  | 这一章之前 | 这一章之后 |
+|---|---|---|
+| 什么时候问用户 | 要么从不问，要么每次都问 | 只在内核真的拒绝时 |
+| 一轮跑到一半时问 | 函数形态下做不到 | 这一轮挂在一个 future 上 |
+| 答复怎么来 | — | 同一条队列上的另一个 `Op` |
+| 同一条命令问几遍 | 每次尝试都问 | `approved_for_session` 记住了 |
+| 没人在键盘前 | 要么挂死，要么不设防地跑 | `never`：失败，并把原因给模型 |
 
 ---
 

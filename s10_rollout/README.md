@@ -183,6 +183,18 @@ draw a list. So the summary comes from the head: meta, then the first user messa
 
 ---
 
+## What changed
+
+|  | Before this chapter | After it |
+|---|---|---|
+| Where the session lives | memory only | a JSONL file on disk |
+| When it is written | n/a | every line, flushed immediately |
+| A crash | loses everything | loses at most the half-written last line |
+| Continuing yesterday's work | impossible | `resume` |
+| Trying a different approach from turn 3 | impossible | `fork`, leaving the original intact |
+
+---
+
 ## Try it
 
 **No API key needed:**

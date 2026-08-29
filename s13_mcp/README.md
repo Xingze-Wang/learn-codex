@@ -207,6 +207,17 @@ model reads it and adjusts. Only the transport dying is a real error. Same rule 
 
 ---
 
+## What changed
+
+|  | Before this chapter | After it |
+|---|---|---|
+| External tools | not possible without forking | declare an MCP server in config |
+| Two servers exporting `search` | a name collision | grouped in a `type: "namespace"` object |
+| One broken server | startup fails | a warning; the other nine still work |
+| Thirty servers | 150 schemas on every request | one `tool_search` tool |
+
+---
+
 ## Try it
 
 **No API key needed:**

@@ -25,6 +25,9 @@
 
 ## 先理解：模型是怎么「要求」执行命令的
 
+> 如果「列表」「字典」「函数」「JSON」这些词你不熟，先看
+> **[开始之前](../PRIMER-zh.md)**。二十分钟，看完这一章就通了。
+
 模型不能执行任何东西。它只能输出文本。
 
 但 OpenAI 的接口提供了一个约定，叫 **function calling**（函数调用）：你在请求里附上一份
@@ -151,33 +154,43 @@ for call in calls:
 **第 6 步**：回到第 2 步。history 现在长了三个 item（用户的话、模型的调用、命令的结果），
 模型下一次就能看到命令跑出来什么了。
 
-组装起来就是全部：
+组装起来就是全部。这一段每一行都标了注释 —— 如果你能读懂它，这个仓库剩下的部分你都能读：
 
 ```python
-def run_turn(self, user_text: str) -> str:
-    self.history.append(user_item(user_text))
-    while True:
-        calls = []
-        for event in self.client.stream(
-            instructions=BASE_INSTRUCTIONS,
-            input_items=list(self.history),
-            tools=[EXEC_COMMAND_TOOL],
+def run_turn(self, user_text: str) -> str:        # 定义一个函数，收一句话，最后交回一句话
+    self.history.append(user_item(user_text))     # 把用户这句话放进历史列表的末尾
+
+    while True:                                   # 开始重复。没有次数上限
+        calls = []                                # 准备一个空列表，装这一圈要跑的命令
+
+        for event in self.client.stream(          # 问模型，一小块一小块地接它的回答
+            instructions=BASE_INSTRUCTIONS,       #   系统提示词：你是谁、你该怎么干活
+            input_items=list(self.history),       #   到目前为止的全部对话
+            tools=[EXEC_COMMAND_TOOL],            #   它能用的工具清单（这里只有一个）
         ):
-            if isinstance(event, OutputItemDone):
-                self.history.append(event.item)
-                if event.item.get("type") == "function_call":
-                    calls.append(event.item)
+            if isinstance(event, OutputItemDone): # 如果这一小块是"一个完整的 item 做好了"
+                self.history.append(event.item)   #   原样收进历史（消息、思考、工具调用都收）
+                if event.item.get("type") == "function_call":   # 如果这个 item 是一次工具调用
+                    calls.append(event.item)      #     记下来，等会要跑
 
-        if not calls:
-            return last_message
+        if not calls:                             # 这一圈模型一个工具都没要求
+            return last_message                   #   说明它说完了。交回它最后那段话，函数结束
 
-        for call in calls:
-            self.history.append({
-                "type": "function_call_output",
-                "call_id": call["call_id"],
-                "output": self._dispatch(call),
+        for call in calls:                        # 否则，把记下的命令一条条跑掉
+            self.history.append({                 #   跑完的结果也放进历史
+                "type": "function_call_output",   #     标明这是"一次工具调用的结果"
+                "call_id": call["call_id"],       #     贴上原来那次调用的编号，好让模型对上号
+                "output": self._dispatch(call),   #     真正去执行它，拿到输出
             })
+                                                  # 回到 while True 的开头，再问一次模型 --
+                                                  # 这次它能看到命令跑出来什么了
 ```
+
+**读一遍这个循环在干什么：**
+
+> 把你的话记下来 → 问模型 → 它要求跑命令吗？
+> **不要求** → 结束，把它的话给你。
+> **要求** → 跑掉，把结果记下来 → 再问一次模型 → 回到开头。
 
 三十行，一个能干活的 agent 就有了。**后面十四章全部围绕它展开，没有一章去改它。**
 
@@ -287,10 +300,21 @@ except json.JSONDecodeError as exc:
 
 | 部件 | 作用 |
 |---|---|
-| `ResponsesClient` | 真实路径：发一次流式请求，把 SSE 事件翻译成三种 Python 对象 |
+| `ResponsesClient` | 真实路径：发一次流式请求，把收到的碎片翻译成三种 Python 对象 |
 | `OutputTextDelta` / `OutputItemDone` / `Completed` | 那三种事件（codex 里这个枚举叫 `ResponseEvent`） |
 | `exec_command` | 跑一条命令，收集输出，限制体积 |
 | `Session.run_turn` | 上面那个循环 |
+
+---
+
+## 这一章改变了什么
+
+|  | 这一章之前 | 这一章之后 |
+|---|---|---|
+| 循环 | 你自己复制粘贴 | `while True` 检查有没有 `function_call` |
+| 工具 | 没有 | `exec_command` |
+| 历史 | 没有 | 一个不断变长的 item 列表 |
+| 什么时候停 | 你累了就停 | 模型不再要求工具 |
 
 ---
 

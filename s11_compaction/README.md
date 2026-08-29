@@ -192,6 +192,18 @@ three turns later.
 
 ---
 
+## What changed
+
+|  | Before this chapter | After it |
+|---|---|---|
+| History size | grows forever | capped at a fraction of the window |
+| Hitting the limit | the request errors, the task stops | compacted beforehand, the turn continues |
+| What is dropped | n/a | tool outputs, reasoning, intermediate steps |
+| What survives | n/a | prefix + recent user turns + one summary |
+| Who writes the summary | n/a | the model that just did the work, with no tools |
+
+---
+
 ## Try it
 
 First, the rebuild with **no API call**:

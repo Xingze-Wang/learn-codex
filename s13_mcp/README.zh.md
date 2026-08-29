@@ -199,6 +199,17 @@ if result.get("isError"):
 
 ---
 
+## 这一章改变了什么
+
+|  | 这一章之前 | 这一章之后 |
+|---|---|---|
+| 外部工具 | 不 fork 就没法加 | 在配置里声明一个 MCP server |
+| 两个 server 都有 `search` | 名字撞了 | 各自装进一个 `type: "namespace"` 对象 |
+| 一个坏掉的 server | 启动失败 | 一条警告；另外九个照常可用 |
+| 三十个 server | 每次请求带 150 份 schema | 一个 `tool_search` 工具 |
+
+---
+
 ## 试一下
 
 **不需要 API key：**

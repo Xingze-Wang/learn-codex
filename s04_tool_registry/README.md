@@ -263,6 +263,18 @@ separately is the part worth copying.
 
 ---
 
+## What changed
+
+|  | Before this chapter | After it |
+|---|---|---|
+| Adding a tool | another `elif` in the loop | one `registry.register(...)` |
+| The tool list | hard-coded | assembled per turn from model + config |
+| Call shapes | JSON only | JSON functions **and** freeform grammar tools |
+| A tool failing | an exception kills the session | text the model reads and reacts to |
+| Tool output | unbounded | head + tail on a token budget |
+
+---
+
 ## Try it
 
 Look at the tool list that actually gets sent:

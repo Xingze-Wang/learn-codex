@@ -215,7 +215,9 @@ is just a conversation.**
 Step 6 says "cancel the task". But if the turn is parked on a blocking network read, the
 cancellation never lands — Python can only switch away at an `await`.
 
-So s01's synchronous stream gets a wrapper:
+So s01's stream — which arrives on a connection you have to sit and wait on — gets a wrapper.
+(The **event loop** is Python's scheduler for async code: the thing that decides which paused
+`await` gets to run next.)
 
 ```python
 async def _astream(client: ModelClient, **kwargs: Any) -> AsyncIterator[ResponseEvent]:
@@ -275,8 +277,19 @@ So the abort itself has to become a fact in the conversation.
 | `CodexThread` | The two queues, plus `submit()` / `next_event()` |
 | `_submission_loop` | One consumer; never blocks on a running turn |
 | `Session.pending_input` | The steering queue |
-| `_astream` | Blocking SSE → cancellable async iterator |
+| `_astream` | A stream you must wait on → one you can cancel mid-way |
 | `_render` | A frontend. It does one thing: read events, print them |
+
+---
+
+## What changed
+
+|  | Before this chapter | After it |
+|---|---|---|
+| How you call it | a function you wait on | submit an `Op`, read `Event`s |
+| Stopping it | Ctrl-C kills the process | `Op.Interrupt` cancels one task |
+| Correcting it mid-run | impossible | queued, folded in at the next step boundary |
+| Frontends | exactly one | any number, reading the same stream |
 
 ---
 

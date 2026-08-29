@@ -207,7 +207,8 @@ while True:
 第 6 步说「取消那个 task」。但如果这一轮正卡在一个阻塞的网络读上，取消就落不了地 ——
 Python 只能在 `await` 的位置切走。
 
-所以 s01 那个同步的流被包了一层：
+所以 s01 那条流 —— 它来自一个你必须坐在那儿干等的连接 —— 被包了一层。
+（**事件循环**是 Python 给异步代码用的调度器：决定哪个暂停中的 `await` 下一个继续跑。）
 
 ```python
 async def _astream(client: ModelClient, **kwargs: Any) -> AsyncIterator[ResponseEvent]:
@@ -265,8 +266,19 @@ except asyncio.CancelledError:
 | `CodexThread` | 两条队列，加 `submit()` / `next_event()` |
 | `_submission_loop` | 单消费者；从不阻塞在正在跑的一轮上 |
 | `Session.pending_input` | 插话队列 |
-| `_astream` | 阻塞式 SSE → 可取消的异步迭代器 |
+| `_astream` | 一条必须干等的流 → 一条中途可以取消的流 |
 | `_render` | 一个前端。它只做一件事：读事件，打印 |
+
+---
+
+## 这一章改变了什么
+
+|  | 这一章之前 | 这一章之后 |
+|---|---|---|
+| 怎么调用 | 调一个函数然后干等 | 提交一个 `Op`，读 `Event` |
+| 怎么叫停 | Ctrl-C 杀掉整个进程 | `Op.Interrupt` 取消一个 task |
+| 跑到一半纠正它 | 做不到 | 排进队列，在下一个 step 边界并入 |
+| 前端数量 | 只能一个 | 任意多个，读同一条流 |
 
 ---
 

@@ -223,6 +223,17 @@ written, what the rules say.
 
 ---
 
+## What changed
+
+|  | Before this chapter | After it |
+|---|---|---|
+| The mechanisms | fourteen separate files | one process, importing each other |
+| Order of the checks | undefined | hook → policy → assess → sandbox → escalate → hook → rollout |
+| Frontends | one per chapter | a human one and `--json`, on the same stream |
+| What `--json` emits | n/a | the public thread/turn/item schema, not internal names |
+
+---
+
 ## Try it
 
 ```bash

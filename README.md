@@ -4,6 +4,9 @@
 
 [English](README.md) · [中文](README-zh.md)
 
+> **Never written code?** Start with **[the primer](PRIMER.md)** — twenty minutes, and
+> every code block here becomes readable. It assumes nothing.
+
 ---
 
 The agent loop in Codex is about thirty lines. Send the conversation, run whatever
@@ -175,6 +178,8 @@ Suggested order if you are not reading straight through:
 - **What makes it safe** — s07, s08, s09
 - **What makes it survive** — s10, s11
 - **What makes it extensible** — s12, s13, s14
+
+And if any word here is unfamiliar, the [primer](PRIMER.md) has a glossary of every one of them.
 
 ## Project structure
 

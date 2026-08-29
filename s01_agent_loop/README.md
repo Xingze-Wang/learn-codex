@@ -29,6 +29,10 @@ is this chapter.
 
 ## First: how a model "asks" for a command to run
 
+> If `list`, `dict`, `function` or `JSON` are not familiar words, read
+> **[the primer](../PRIMER.md)** first. It takes twenty minutes and this chapter
+> will make sense afterwards.
+
 A model cannot execute anything. It can only emit text.
 
 But the OpenAI API has a convention for this, called **function calling**: you attach a list of
@@ -159,33 +163,44 @@ The `call_id` goes back unchanged, so the model knows which of its requests this
 model's call, the command's output — so the next request lets the model see what the command
 actually printed.
 
-Assembled, that is all of it:
+Assembled, that is all of it. Every line is annotated below — if you can read this, you can read
+the rest of the repo:
 
 ```python
-def run_turn(self, user_text: str) -> str:
-    self.history.append(user_item(user_text))
-    while True:
-        calls = []
-        for event in self.client.stream(
-            instructions=BASE_INSTRUCTIONS,
-            input_items=list(self.history),
-            tools=[EXEC_COMMAND_TOOL],
+def run_turn(self, user_text: str) -> str:        # define a function: takes a sentence, hands one back
+    self.history.append(user_item(user_text))     # put the user's words on the end of the history list
+
+    while True:                                   # start repeating. no limit on how many times
+        calls = []                                # an empty list for the commands this round wants
+
+        for event in self.client.stream(          # ask the model; receive the answer piece by piece
+            instructions=BASE_INSTRUCTIONS,       #   system prompt: who you are, how to work
+            input_items=list(self.history),       #   everything said so far
+            tools=[EXEC_COMMAND_TOOL],            #   the tools it may use (here, exactly one)
         ):
-            if isinstance(event, OutputItemDone):
-                self.history.append(event.item)
-                if event.item.get("type") == "function_call":
-                    calls.append(event.item)
+            if isinstance(event, OutputItemDone): # if this piece is "one complete item is finished"
+                self.history.append(event.item)   #   keep it as-is (message, reasoning, tool call alike)
+                if event.item.get("type") == "function_call":   # and if that item is a tool call
+                    calls.append(event.item)      #     note it down; we run it below
 
-        if not calls:
-            return last_message
+        if not calls:                             # the model asked for no tools this round
+            return last_message                   #   so it is done. hand back its last words; finish
 
-        for call in calls:
-            self.history.append({
-                "type": "function_call_output",
-                "call_id": call["call_id"],
-                "output": self._dispatch(call),
+        for call in calls:                        # otherwise run each noted command
+            self.history.append({                 #   and put its result into history too
+                "type": "function_call_output",   #     labelled "the result of a tool call"
+                "call_id": call["call_id"],       #     tagged with the original id so the model matches it
+                "output": self._dispatch(call),   #     actually execute it and take the output
             })
+                                                  # back to the top of while True and ask again --
+                                                  # this time the model can see what the command printed
 ```
+
+**Read what the loop does, in one breath:**
+
+> Note down what you said → ask the model → did it ask for a command?
+> **No** → stop, hand you its answer.
+> **Yes** → run it, note the result → ask the model again → back to the top.
 
 Thirty lines and you have a working agent. **All fourteen later chapters are built around this
 loop, and none of them change it.**
@@ -300,10 +315,21 @@ would end the whole session over something the model could have handled itself.
 
 | Piece | Job |
 |---|---|
-| `ResponsesClient` | The live path: one streaming request, SSE events turned into three Python objects |
+| `ResponsesClient` | The live path: one streaming request, the pieces turned into three Python objects |
 | `OutputTextDelta` / `OutputItemDone` / `Completed` | Those three events (codex calls this enum `ResponseEvent`) |
 | `exec_command` | Run one command, capture output, cap its size |
 | `Session.run_turn` | The loop above |
+
+---
+
+## What changed
+
+|  | Before this chapter | After it |
+|---|---|---|
+| The loop | you, copy-pasting | `while True` checking for `function_call` |
+| Tools | none | `exec_command` |
+| History | none | a growing list of items |
+| When it stops | when you get tired | when the model stops asking for tools |
 
 ---
 

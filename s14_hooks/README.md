@@ -211,6 +211,17 @@ So the shortest possible hook is a line of shell:
 
 ---
 
+## What changed
+
+|  | Before this chapter | After it |
+|---|---|---|
+| Changing harness policy | fork the project | write a program, list it in `hooks.json` |
+| Blocking a tool call | not available to you | `PreToolUse` returning `deny` |
+| Injecting your own context | not available to you | `additionalContext`, bounded |
+| A hook that crashes or hangs | n/a | a warning; the session continues |
+
+---
+
 ## Try it
 
 **No API key needed:**

@@ -231,6 +231,17 @@ the heuristic stays quiet. **That is the real limit of the approach**, and it is
 
 ---
 
+## What changed
+
+|  | Before this chapter | After it |
+|---|---|---|
+| Privileges | yours, in full | what the kernel allows this process |
+| Writing | anywhere on disk | only inside the writable roots |
+| Network | open | closed by default |
+| How danger is judged | inspect the command string (impossible) | not judged — the command's *ability* is changed |
+
+---
+
 ## Try it
 
 **No API key needed:**

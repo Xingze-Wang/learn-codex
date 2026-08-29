@@ -117,7 +117,7 @@ async def _ask(self, sub_id, call_id, cmd, cwd, reason, justification) -> str:
         self.pending_approvals.pop(call_id, None)
 ```
 
-`await future` means "this coroutine stops here until someone fills in the result". **It holds
+`await future` means "this function stops here until someone fills in the result". **It holds
 no thread and blocks no event loop** — other ops keep being handled, `/interrupt` keeps working.
 
 The answer arrives later as **another submission on the same queue**:
@@ -186,6 +186,18 @@ if self.approval_policy == NEVER:
 | `Session._exec_with_approval` | The six steps |
 | `_ask` / `resolve_approval` | A future parked in the turn, resolved by an Op |
 | `approved` | The session-scoped approval cache |
+
+---
+
+## What changed
+
+|  | Before this chapter | After it |
+|---|---|---|
+| When the user is asked | never, or every time | only when the kernel actually refused |
+| Asking mid-turn | impossible in a function | a future the turn parks on |
+| The answer | n/a | another `Op` on the same queue |
+| Asking twice for the same command | every attempt | `approved_for_session` remembers |
+| Nobody at the keyboard | hangs, or runs unprotected | `never`: fails, and tells the model why |
 
 ---
 

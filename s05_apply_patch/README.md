@@ -198,6 +198,18 @@ turn. **The model never has to run `git diff` to show its work.**
 
 ---
 
+## What changed
+
+|  | Before this chapter | After it |
+|---|---|---|
+| Editing a file | a shell command that rewrites the whole file | a patch describing only the change |
+| Cost | proportional to the file | proportional to the change |
+| If the model misremembers the file | silently overwrites your work | the patch fails and says why |
+| A patch that fails halfway | files left half-edited | nothing written at all |
+| Showing the diff | the model runs `git diff` | the harness emits it directly |
+
+---
+
 ## Try it
 
 This chapter needs **no API key** — it is pure logic:

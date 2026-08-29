@@ -214,6 +214,18 @@ it saw everything.
 
 ---
 
+## What changed
+
+|  | Before this chapter | After it |
+|---|---|---|
+| Running a command | `subprocess.run`, wait for exit | a PTY session |
+| A command that never exits | hangs the agent forever | returns early with a session id |
+| Talking to a running program | impossible | `write_stdin` |
+| `cd build` | lost on the next call | kept for the life of the session |
+| Killing it | children keep running | the whole process group goes |
+
+---
+
 ## Try it
 
 This chapter needs **no API key**:

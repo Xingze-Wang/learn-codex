@@ -181,6 +181,17 @@ it. If no, advertise it.
 
 ---
 
+## What changed
+
+|  | Before this chapter | After it |
+|---|---|---|
+| The prompt | one hard-coded string | four sources on three channels |
+| Project rules | you repeat them every conversation | `AGENTS.md`, discovered automatically |
+| A monorepo | one set of rules for everything | root → cwd, nearest file wins |
+| A 2000-token procedure | in the prompt on every request, or absent | one line advertised, body fetched on demand |
+
+---
+
 ## Try it
 
 **No API key needed.** First the layering:

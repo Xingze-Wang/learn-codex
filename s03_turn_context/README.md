@@ -217,6 +217,17 @@ So why does it exist? Two reasons:
 
 ---
 
+## What changed
+
+|  | Before this chapter | After it |
+|---|---|---|
+| Settings | globals a tool reads whenever | a frozen `TurnContext` passed in |
+| Changing settings mid-turn | the running tool silently changes behavior | the turn keeps the settings it started with |
+| What the model knows about its environment | nothing; it finds out by failing | an `<environment_context>` block |
+| How often that block is sent | n/a | only when its rendering changes |
+
+---
+
 ## Try it
 
 See what would be injected, with no API call:
